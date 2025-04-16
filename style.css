@@ -1,11 +1,11 @@
 body {
     font-family: sans-serif;
     display: flex;
-    flex-direction: column; /* Stack elements vertically */
+    flex-direction: column; /* Stack title and main-layout */
     align-items: center; /* Center horizontally */
     background-color: #f0f0f0;
     margin: 0;
-    padding-top: 20px; /* Add some space at the top */
+    padding: 20px; /* Add padding around everything */
     color: #333;
 }
 
@@ -33,6 +33,7 @@ button {
     display: block; /* Make buttons stack vertically */
     width: 100%; /* Make buttons fill control width */
     box-sizing: border-box; /* Include padding/border in width */
+    margin-bottom: 5px; /* Space between buttons */
 }
 
 button:hover {
@@ -46,7 +47,6 @@ button:disabled {
 
 .mode-select {
     margin-bottom: 10px;
-    /* display: flex; */ /* Removed to stack buttons */
     gap: 5px;
 }
 
@@ -69,4 +69,32 @@ button:disabled {
     font-size: 0.95em;
 }
 
-/* Responsive adjustments might be needed depending on layout */
+/* Responsive adjustments */
+@media (max-width: 900px) {
+    .main-layout {
+        flex-direction: column; /* Stack canvas and controls vertically */
+        align-items: center; /* Center items when stacked */
+    }
+    #gameCanvasContainer {
+        width: 90%; /* Make canvas wider */
+        max-width: 600px; /* Limit max width */
+        height: auto; /* Adjust height automatically */
+        aspect-ratio: 1 / 1; /* Keep it square */
+    }
+    .controls-container {
+        width: 90%;
+        max-width: 400px;
+        flex-direction: row; /* Place controls side-by-side */
+        justify-content: space-around;
+    }
+     .controls, .info {
+         min-width: 150px;
+         flex: 1; /* Allow them to grow equally */
+     }
+}
+
+@media (max-width: 480px) {
+    .controls-container {
+        flex-direction: column; /* Stack controls vertically again on very small screens */
+    }
+}

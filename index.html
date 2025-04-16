@@ -3,55 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Grid Laser Duel 3D</title>
+    <title>Grid Laser Duel 3D (Enhanced)</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        /* Ensure canvas takes up space and UI overlays correctly */
+        /* Keep canvas container styles */
         #gameCanvasContainer {
-            position: relative; /* Needed for absolute positioning of UI */
-            width: 600px; /* Adjust as needed */
-            height: 600px; /* Adjust as needed */
-            margin: 0 auto; /* Center the container */
-            border: 1px solid black; /* Optional: visualize container bounds */
+            position: relative; /* Keep for potential future overlays if needed */
+            width: 700px; /* Adjusted for larger grid potentially */
+            height: 700px; /* Adjusted for larger grid potentially */
+            margin: 10px;
+            border: 1px solid black;
         }
         #threeCanvas {
-            display: block; /* Remove potential extra space below canvas */
+            display: block;
             width: 100%;
             height: 100%;
         }
-        .game-ui-overlay {
-             position: absolute;
-             top: 10px;
-             left: 10px;
-             right: 10px;
-             display: flex;
-             justify-content: space-between;
-             background-color: rgba(255, 255, 255, 0.8); /* Semi-transparent background */
-             padding: 10px;
-             border-radius: 5px;
-             pointer-events: none; /* Allow clicks to pass through overlay bg */
+        /* NEW: Layout for canvas and controls */
+        .main-layout {
+            display: flex;
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
+            justify-content: center; /* Center items */
+            align-items: flex-start; /* Align tops */
+            gap: 20px; /* Space between canvas and controls */
         }
-         .game-ui-overlay > div {
-             pointer-events: all; /* Enable interaction for child elements */
-         }
-        /* Adjust control/info styling for overlay */
+        /* Adjust control/info styling */
+        .controls-container {
+             display: flex;
+             flex-direction: column; /* Stack control sections */
+             gap: 15px;
+        }
         .controls, .info {
-            border: none;
-            padding: 0;
-            background-color: transparent;
-            box-shadow: none;
-            min-width: 150px;
+            border: 1px solid #ccc;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            min-width: 200px;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
          }
-         button { margin-bottom: 5px; }
-         h1 { margin-bottom: 10px; }
     </style>
 </head>
 <body>
-    <h1>Grid Laser Duel 3D</h1>
+    <h1>Grid Laser Duel 3D (Enhanced)</h1>
 
-    <div id="gameCanvasContainer">
-        <canvas id="threeCanvas"></canvas>
-        <div class="game-ui-overlay">
+    <div class="main-layout">
+        <div id="gameCanvasContainer">
+            <canvas id="threeCanvas"></canvas>
+            <!-- Overlays removed from here -->
+        </div>
+
+        <div class="controls-container">
             <div class="controls">
                 <h2>Controls</h2>
                 <div class="mode-select">
