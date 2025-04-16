@@ -1,100 +1,244 @@
+/* General Body and Typography */
 body {
-    font-family: sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
     display: flex;
-    flex-direction: column; /* Stack title and main-layout */
-    align-items: center; /* Center horizontally */
-    background-color: #f0f0f0;
+    flex-direction: column;
+    align-items: center;
+    background-color: #f4f7f9; /* Slightly softer background */
     margin: 0;
-    padding: 20px; /* Add padding around everything */
+    padding: 20px;
     color: #333;
+    min-height: 100vh;
+    box-sizing: border-box;
 }
 
-h1, h2 {
+h1 {
     text-align: center;
-    color: #333;
+    color: #2c3e50; /* Darker heading color */
     margin-top: 0;
-    margin-bottom: 10px;
+    margin-bottom: 25px; /* More space below main title */
+    font-weight: 600;
+}
+
+h2 {
+    text-align: center;
+    color: #34495e; /* Slightly lighter sub-heading */
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 1.2em;
+    border-bottom: 1px solid #e0e0e0; /* Add a separator */
+    padding-bottom: 8px;
 }
 
 p {
-    margin-top: 5px;
-    margin-bottom: 10px;
-    color: #333;
+    margin-top: 8px;
+    margin-bottom: 12px;
+    color: #555;
     font-size: 0.9em;
+    line-height: 1.5; /* Improved line spacing */
 }
 
+/* Main Layout Container */
+.main-layout {
+    display: flex;
+    /* --- CHANGE: Default is NO WRAP (side-by-side) --- */
+    /* flex-wrap: wrap; Removed */
+    justify-content: center;
+    align-items: flex-start;
+    gap: 30px; /* Consistent gap */
+    width: 100%;
+    max-width: 1100px; /* Max width of the whole game layout */
+    margin: 0 auto;
+}
+
+/* Game Canvas Container - Fixed Size & No Shrinking */
+#gameCanvasContainer {
+    width: 700px;
+    height: 700px;
+    flex-grow: 0;   /* Don't grow */
+    flex-shrink: 0; /* --- CRITICAL: Prevent shrinking --- */
+    flex-basis: 700px; /* Explicit size */
+    position: relative;
+    border: 1px solid #ccc; /* Slightly softer border */
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); /* Enhanced shadow */
+    background-color: #fff; /* Ensure background for canvas area */
+}
+
+#threeCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* Controls Area Container */
+.controls-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    flex-grow: 1;   /* Allow it to take up remaining space if side-by-side */
+    flex-shrink: 1; /* Allow it to shrink if needed, but not beyond content */
+    flex-basis: 250px; /* Suggest a width, works with flex-grow */
+    min-width: 230px; /* Prevent it from becoming too narrow */
+}
+
+/* Individual Control/Info Panels */
+.controls, .info {
+    border: 1px solid #d5dbe1; /* Softer border */
+    padding: 15px 20px;
+    background-color: #ffffff; /* White background */
+    border-radius: 8px; /* Slightly more rounded */
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.06);
+}
+
+/* Interactive Elements */
 button {
-    padding: 8px 12px;
-    font-size: 0.9em;
+    padding: 10px 16px; /* Standard padding */
+    font-size: 0.95em;
+    font-weight: 500; /* Medium weight */
     cursor: pointer;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    background-color: #e7e7e7;
-    display: block; /* Make buttons stack vertically */
-    width: 100%; /* Make buttons fill control width */
-    box-sizing: border-box; /* Include padding/border in width */
-    margin-bottom: 5px; /* Space between buttons */
+    border: 1px solid #b0bec5; /* Button border color */
+    border-radius: 5px;
+    background-color: #eceff1; /* Light grey background */
+    color: #37474f; /* Darker button text */
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 8px;
+    text-align: center;
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 button:hover {
-    background-color: #ddd;
+    background-color: #cfd8dc; /* Slightly darker hover */
+    border-color: #90a4ae;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 button:disabled {
     cursor: not-allowed;
     opacity: 0.6;
+    background-color: #f5f5f5; /* Lighter disabled background */
+    border-color: #e0e0e0;
+    box-shadow: none;
 }
 
 .mode-select {
-    margin-bottom: 10px;
-    gap: 5px;
+    margin-bottom: 15px;
+    display: flex;
+    gap: 10px;
+}
+
+.mode-select button {
+    width: auto; /* Override block width */
+    flex: 1; /* Share space */
 }
 
 .mode-button.active {
     background-color: #4CAF50; /* Green */
     color: white;
-    border-color: #4CAF50;
+    border-color: #388E3C;
+    font-weight: 600;
+}
+.mode-button.active:hover {
+    background-color: #45a049;
 }
 
+
+/* Info/Message Area Styling */
 #phaseIndicator {
-    font-weight: bold;
-    color: #555;
+    font-weight: 600; /* Bolder phase */
+    color: #2c3e50;
+    font-size: 1.05em; /* Slightly larger phase */
 }
 
 #messageArea {
-    margin-top: 10px;
-    min-height: 30px; /* Prevent layout shift */
-    color: #d32f2f; /* Reddish for emphasis */
-    font-weight: bold;
+    margin-top: 12px;
+    color: #881a1a; /* Darker red for messages */
+    font-weight: 500; /* Normal weight for messages */
     font-size: 0.95em;
+    background-color: #fceeee; /* Lighter red background */
+    padding: 10px 12px;
+    border-radius: 5px;
+    border: 1px solid #f8d7da; /* Reddish border */
+    /* --- CRITICAL FIX --- */
+    min-height: 4em; /* Reserve space for ~2-3 lines. Adjust if needed. */
+    display: flex; /* Use flex to center text vertically if short */
+    align-items: center;
+    box-sizing: border-box; /* Include padding/border in height */
 }
 
-/* Responsive adjustments */
-@media (max-width: 900px) {
+/* --- Responsive Layout --- */
+
+/* Breakpoint when side-by-side becomes too cramped */
+/* (Canvas width + Controls min-width + Gap) -> (700 + 230 + 30 = 960) */
+@media (max-width: 980px) {
     .main-layout {
-        flex-direction: column; /* Stack canvas and controls vertically */
+        /* --- CHANGE: Stack vertically below this width --- */
+        flex-direction: column;
         align-items: center; /* Center items when stacked */
+        gap: 25px; /* Adjust gap for vertical stacking */
     }
+
     #gameCanvasContainer {
-        width: 90%; /* Make canvas wider */
-        max-width: 600px; /* Limit max width */
-        height: auto; /* Adjust height automatically */
-        aspect-ratio: 1 / 1; /* Keep it square */
+        width: 95%; /* Allow canvas to take most of width */
+        max-width: 700px; /* But don't exceed its original size */
+        height: auto;
+        aspect-ratio: 1 / 1; /* Maintain square shape */
+        flex-basis: auto; /* Reset basis */
+        order: 1; /* Ensure canvas is first */
     }
+
     .controls-container {
-        width: 90%;
-        max-width: 400px;
-        flex-direction: row; /* Place controls side-by-side */
-        justify-content: space-around;
+        order: 2; /* Ensure controls are below canvas */
+        width: 95%; /* Take similar width to canvas */
+        max-width: 600px; /* Limit controls width */
+        flex-basis: auto; /* Reset basis */
+        /* Optional: Arrange controls side-by-side again */
+        flex-direction: row;
+        gap: 20px;
+        align-items: stretch; /* Make panels same height */
     }
-     .controls, .info {
-         min-width: 150px;
-         flex: 1; /* Allow them to grow equally */
-     }
+
+    .controls, .info {
+        flex: 1; /* Allow panels to share space */
+        min-width: 180px; /* Min width for each panel */
+    }
 }
 
-@media (max-width: 480px) {
-    .controls-container {
-        flex-direction: column; /* Stack controls vertically again on very small screens */
+/* Smaller screens: Stack control panels vertically */
+@media (max-width: 500px) {
+    body {
+        padding: 10px; /* Reduce body padding */
     }
+    h1 { font-size: 1.5em; margin-bottom: 15px;}
+    .main-layout { gap: 20px; }
+
+    #gameCanvasContainer {
+         width: 100%; /* Use full width */
+         border: none; /* Remove border on small screens */
+         box-shadow: none;
+    }
+
+    .controls-container {
+        flex-direction: column; /* Stack panels */
+        width: 100%; /* Full width */
+        gap: 15px;
+    }
+
+    .controls, .info {
+        padding: 10px 15px; /* Reduce padding */
+        min-width: unset; /* Remove min-width */
+    }
+
+    .mode-select {
+         flex-direction: column; /* Stack mode buttons */
+    }
+    .mode-select button {
+        width: 100%;
+    }
+
+    button { font-size: 0.9em; padding: 9px 12px;}
+    h2 { font-size: 1.1em; }
+    p { font-size: 0.85em; }
+    #messageArea { min-height: 3.5em; } /* Adjust min-height */
 }
