@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grid Laser Duel 3D</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Ensure canvas takes up space and UI overlays correctly */
+        #gameCanvasContainer {
+            position: relative; /* Needed for absolute positioning of UI */
+            width: 600px; /* Adjust as needed */
+            height: 600px; /* Adjust as needed */
+            margin: 0 auto; /* Center the container */
+            border: 1px solid black; /* Optional: visualize container bounds */
+        }
+        #threeCanvas {
+            display: block; /* Remove potential extra space below canvas */
+            width: 100%;
+            height: 100%;
+        }
+        .game-ui-overlay {
+             position: absolute;
+             top: 10px;
+             left: 10px;
+             right: 10px;
+             display: flex;
+             justify-content: space-between;
+             background-color: rgba(255, 255, 255, 0.8); /* Semi-transparent background */
+             padding: 10px;
+             border-radius: 5px;
+             pointer-events: none; /* Allow clicks to pass through overlay bg */
+        }
+         .game-ui-overlay > div {
+             pointer-events: all; /* Enable interaction for child elements */
+         }
+        /* Adjust control/info styling for overlay */
+        .controls, .info {
+            border: none;
+            padding: 0;
+            background-color: transparent;
+            box-shadow: none;
+            min-width: 150px;
+         }
+         button { margin-bottom: 5px; }
+         h1 { margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Grid Laser Duel 3D</h1>
+
+    <div id="gameCanvasContainer">
+        <canvas id="threeCanvas"></canvas>
+        <div class="game-ui-overlay">
+            <div class="controls">
+                <h2>Controls</h2>
+                <div class="mode-select">
+                    <button id="btnPlanMove" class="mode-button">Plan Move</button>
+                    <button id="btnPlanShoot" class="mode-button">Plan Shoot</button>
+                </div>
+                <p id="weaponLevelInfo">Your Weapon Level: 1</p>
+                <button id="btnReset">Reset Game</button>
+            </div>
+
+            <div class="info">
+                <h2>Info</h2>
+                <p id="phaseIndicator">Phase: Planning</p>
+                <p id="messageArea">Plan your action.</p>
+                <p id="aiWeaponLevelInfo">AI Weapon Level: 1</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import map for Three.js and Tween.js (ESM) -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.162.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.162.0/examples/jsm/",
+           "@tweenjs/tween.js": "https://unpkg.com/@tweenjs/tween.js@23.1.1/dist/tween.esm.js"
+        }
+      }
+    </script>
+
+    <script type="module" src="game_3d.js"></script> <!-- Note: type="module" -->
+</body>
+</html>

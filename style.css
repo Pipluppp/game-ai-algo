@@ -1,0 +1,72 @@
+body {
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column; /* Stack elements vertically */
+    align-items: center; /* Center horizontally */
+    background-color: #f0f0f0;
+    margin: 0;
+    padding-top: 20px; /* Add some space at the top */
+    color: #333;
+}
+
+h1, h2 {
+    text-align: center;
+    color: #333;
+    margin-top: 0;
+    margin-bottom: 10px;
+}
+
+p {
+    margin-top: 5px;
+    margin-bottom: 10px;
+    color: #333;
+    font-size: 0.9em;
+}
+
+button {
+    padding: 8px 12px;
+    font-size: 0.9em;
+    cursor: pointer;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #e7e7e7;
+    display: block; /* Make buttons stack vertically */
+    width: 100%; /* Make buttons fill control width */
+    box-sizing: border-box; /* Include padding/border in width */
+}
+
+button:hover {
+    background-color: #ddd;
+}
+
+button:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.mode-select {
+    margin-bottom: 10px;
+    /* display: flex; */ /* Removed to stack buttons */
+    gap: 5px;
+}
+
+.mode-button.active {
+    background-color: #4CAF50; /* Green */
+    color: white;
+    border-color: #4CAF50;
+}
+
+#phaseIndicator {
+    font-weight: bold;
+    color: #555;
+}
+
+#messageArea {
+    margin-top: 10px;
+    min-height: 30px; /* Prevent layout shift */
+    color: #d32f2f; /* Reddish for emphasis */
+    font-weight: bold;
+    font-size: 0.95em;
+}
+
+/* Responsive adjustments might be needed depending on layout */
