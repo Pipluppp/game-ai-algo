@@ -3,73 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Grid Laser Duel 3D (Enhanced)</title>
+    <title>Grid Laser Duel 3D - Immersive</title>
     <link rel="stylesheet" href="style.css">
-    <style>
-        /* Keep canvas container styles */
-        #gameCanvasContainer {
-            position: relative; /* Keep for potential future overlays if needed */
-            width: 700px; /* Adjusted for larger grid potentially */
-            height: 700px; /* Adjusted for larger grid potentially */
-            margin: 10px;
-            border: 1px solid black;
-        }
-        #threeCanvas {
-            display: block;
-            width: 100%;
-            height: 100%;
-        }
-        /* NEW: Layout for canvas and controls */
-        .main-layout {
-            display: flex;
-            flex-wrap: wrap; /* Allow wrapping on smaller screens */
-            justify-content: center; /* Center items */
-            align-items: flex-start; /* Align tops */
-            gap: 20px; /* Space between canvas and controls */
-        }
-        /* Adjust control/info styling */
-        .controls-container {
-             display: flex;
-             flex-direction: column; /* Stack control sections */
-             gap: 15px;
-        }
-        .controls, .info {
-            border: 1px solid #ccc;
-            padding: 15px;
-            background-color: #f9f9f9;
-            border-radius: 5px;
-            min-width: 200px;
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
-         }
-    </style>
 </head>
 <body>
-    <h1>Grid Laser Duel 3D (Enhanced)</h1>
+    <div id="game-container">
 
-    <div class="main-layout">
-        <div id="gameCanvasContainer">
-            <canvas id="threeCanvas"></canvas>
-            <!-- Overlays removed from here -->
+        <!-- Area for the 3D Canvas -->
+        <div id="game-canvas-area">
+            <div id="gameCanvasContainer">
+                <canvas id="threeCanvas"></canvas>
+            </div>
         </div>
 
-        <div class="controls-container">
-            <div class="controls">
-                <h2>Controls</h2>
+        <!-- Fixed UI Panel -->
+        <div id="ui-panel">
+            <h1>Grid Laser Duel</h1>
+
+            <div class="ui-section info-panel">
+                <h2>Status</h2>
+                <p id="phaseIndicator">Phase: Planning</p>
+                <p id="messageArea">Plan your action.</p>
+            </div>
+
+            <div class="ui-section controls-panel">
+                <h2>Player Controls</h2>
                 <div class="mode-select">
                     <button id="btnPlanMove" class="mode-button">Plan Move</button>
                     <button id="btnPlanShoot" class="mode-button">Plan Shoot</button>
                 </div>
                 <p id="weaponLevelInfo">Your Weapon Level: 1</p>
-                <button id="btnReset">Reset Game</button>
+                 <p id="aiWeaponLevelInfo">AI Weapon Level: 1</p> <!-- Moved AI level here -->
             </div>
 
-            <div class="info">
-                <h2>Info</h2>
-                <p id="phaseIndicator">Phase: Planning</p>
-                <p id="messageArea">Plan your action.</p>
-                <p id="aiWeaponLevelInfo">AI Weapon Level: 1</p>
+            <div class="ui-section game-actions-panel">
+                 <h2>Game</h2>
+                 <button id="btnReset">Reset Game</button>
+            </div>
+
+            <div class="ui-footer">
+                <!-- Can add instructions or links here -->
             </div>
         </div>
+
     </div>
 
     <!-- Import map for Three.js and Tween.js (ESM) -->
@@ -83,6 +59,6 @@
       }
     </script>
 
-    <script type="module" src="game_3d.js"></script> <!-- Note: type="module" -->
+    <script type="module" src="game_3d.js"></script>
 </body>
 </html>

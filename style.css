@@ -1,67 +1,44 @@
-/* General Body and Typography */
-body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    background-color: #f4f7f9; /* Slightly softer background */
+/* --- Base and Reset --- */
+html, body {
+    height: 100%;
     margin: 0;
-    padding: 20px;
-    color: #333;
-    min-height: 100vh;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    background-color: #1a1d21; /* Dark background */
+    color: #e0e0e0; /* Light text */
+    overflow: hidden; /* Prevent body scrollbars */
+    font-size: 16px; /* Base font size */
+}
+
+* {
     box-sizing: border-box;
 }
 
-h1 {
-    text-align: center;
-    color: #2c3e50; /* Darker heading color */
-    margin-top: 0;
-    margin-bottom: 25px; /* More space below main title */
-    font-weight: 600;
-}
-
-h2 {
-    text-align: center;
-    color: #34495e; /* Slightly lighter sub-heading */
-    margin-top: 0;
-    margin-bottom: 15px;
-    font-size: 1.2em;
-    border-bottom: 1px solid #e0e0e0; /* Add a separator */
-    padding-bottom: 8px;
-}
-
-p {
-    margin-top: 8px;
-    margin-bottom: 12px;
-    color: #555;
-    font-size: 0.9em;
-    line-height: 1.5; /* Improved line spacing */
-}
-
-/* Main Layout Container */
-.main-layout {
+/* --- Main Game Container (Flex Layout) --- */
+#game-container {
     display: flex;
-    /* --- CHANGE: Default is NO WRAP (side-by-side) --- */
-    /* flex-wrap: wrap; Removed */
-    justify-content: center;
-    align-items: flex-start;
-    gap: 30px; /* Consistent gap */
-    width: 100%;
-    max-width: 1100px; /* Max width of the whole game layout */
-    margin: 0 auto;
+    height: 100vh; /* Full viewport height */
+    width: 100vw; /* Full viewport width */
 }
 
-/* Game Canvas Container - Fixed Size & No Shrinking */
+/* --- Game Canvas Area --- */
+#game-canvas-area {
+    flex-grow: 1; /* Takes up remaining space */
+    position: relative; /* For potential absolute children if needed */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden; /* Ensure canvas doesn't overflow */
+    background-color: #111315; /* Slightly darker canvas background */
+}
+
 #gameCanvasContainer {
-    width: 700px;
-    height: 700px;
-    flex-grow: 0;   /* Don't grow */
-    flex-shrink: 0; /* --- CRITICAL: Prevent shrinking --- */
-    flex-basis: 700px; /* Explicit size */
-    position: relative;
-    border: 1px solid #ccc; /* Slightly softer border */
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); /* Enhanced shadow */
-    background-color: #fff; /* Ensure background for canvas area */
+    width: 100%;
+    height: 100%;
+    max-width: 100%; /* Ensure it doesn't exceed parent */
+    max-height: 100%;
+    /* Add perspective/visual depth if desired */
+    /* perspective: 1000px; */
 }
 
 #threeCanvas {
@@ -70,56 +47,113 @@ p {
     height: 100%;
 }
 
-/* Controls Area Container */
-.controls-container {
+/* --- UI Panel (Right Side) --- */
+#ui-panel {
+    width: 320px; /* Fixed width for the UI panel */
+    flex-shrink: 0; /* Prevent panel from shrinking */
+    background-color: #282c34; /* Dark UI panel background */
+    padding: 25px 20px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    flex-grow: 1;   /* Allow it to take up remaining space if side-by-side */
-    flex-shrink: 1; /* Allow it to shrink if needed, but not beyond content */
-    flex-basis: 250px; /* Suggest a width, works with flex-grow */
-    min-width: 230px; /* Prevent it from becoming too narrow */
+    overflow-y: auto; /* Allow scrolling if content overflows height */
+    border-left: 1px solid #444; /* Separator */
 }
 
-/* Individual Control/Info Panels */
-.controls, .info {
-    border: 1px solid #d5dbe1; /* Softer border */
-    padding: 15px 20px;
-    background-color: #ffffff; /* White background */
-    border-radius: 8px; /* Slightly more rounded */
-    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.06);
+h1 {
+    text-align: center;
+    color: #61dafb; /* Accent color for title */
+    margin-top: 0;
+    margin-bottom: 25px;
+    font-size: 1.6em;
+    font-weight: 600;
+    letter-spacing: 1px;
 }
 
-/* Interactive Elements */
-button {
-    padding: 10px 16px; /* Standard padding */
+h2 {
+    color: #abb2bf; /* Lighter grey for subheadings */
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 1.1em;
+    font-weight: 500;
+    border-bottom: 1px solid #4b5263; /* Darker separator */
+    padding-bottom: 8px;
+}
+
+.ui-section {
+    margin-bottom: 25px; /* Space between sections */
+}
+
+p {
+    margin-top: 8px;
+    margin-bottom: 12px;
+    color: #c8cdd4; /* Standard text color */
     font-size: 0.95em;
-    font-weight: 500; /* Medium weight */
-    cursor: pointer;
-    border: 1px solid #b0bec5; /* Button border color */
+    line-height: 1.6;
+}
+
+/* Status/Info Specifics */
+#phaseIndicator {
+    font-weight: 600;
+    color: #e5c07b; /* Yellowish for phase */
+    font-size: 1em;
+}
+
+#messageArea {
+    margin-top: 10px;
+    color: #e06c75; /* Reddish for messages */
+    font-weight: 500;
+    font-size: 0.95em;
+    background-color: #322626; /* Dark red background */
+    padding: 10px 12px;
     border-radius: 5px;
-    background-color: #eceff1; /* Light grey background */
-    color: #37474f; /* Darker button text */
+    border: 1px solid #5c3f3f;
+    /* --- CRITICAL: Reserve space --- */
+    min-height: 4.5em; /* Reserve space for ~3 lines */
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+}
+
+/* Controls Specifics */
+#weaponLevelInfo, #aiWeaponLevelInfo {
+    font-weight: 500;
+    color: #98c379; /* Greenish for levels */
+}
+
+/* Buttons */
+button {
+    padding: 10px 16px;
+    font-size: 1em;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid #5c6370; /* Button border */
+    border-radius: 5px;
+    background-color: #3a3f4b; /* Darker button background */
+    color: #d0d8e2; /* Light button text */
     display: block;
     width: 100%;
     box-sizing: border-box;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
     text-align: center;
-    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.1s ease;
 }
 
 button:hover {
-    background-color: #cfd8dc; /* Slightly darker hover */
-    border-color: #90a4ae;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    background-color: #4b5263;
+    border-color: #61dafb; /* Accent border on hover */
 }
+
+button:active {
+    transform: translateY(1px); /* Subtle press effect */
+}
+
 
 button:disabled {
     cursor: not-allowed;
-    opacity: 0.6;
-    background-color: #f5f5f5; /* Lighter disabled background */
-    border-color: #e0e0e0;
-    box-shadow: none;
+    opacity: 0.5;
+    background-color: #31353f;
+    border-color: #4b5263;
+    transform: none;
 }
 
 .mode-select {
@@ -129,116 +163,106 @@ button:disabled {
 }
 
 .mode-select button {
-    width: auto; /* Override block width */
     flex: 1; /* Share space */
 }
 
 .mode-button.active {
-    background-color: #4CAF50; /* Green */
-    color: white;
-    border-color: #388E3C;
+    background-color: #61afef; /* Blue accent for active mode */
+    color: #1e2227; /* Dark text on active */
+    border-color: #61afef;
     font-weight: 600;
 }
 .mode-button.active:hover {
-    background-color: #45a049;
+    background-color: #56a1d8;
+}
+
+/* Footer (Optional) */
+.ui-footer {
+    margin-top: auto; /* Push footer to bottom */
+    padding-top: 20px;
+    font-size: 0.8em;
+    text-align: center;
+    color: #5c6370;
 }
 
 
-/* Info/Message Area Styling */
-#phaseIndicator {
-    font-weight: 600; /* Bolder phase */
-    color: #2c3e50;
-    font-size: 1.05em; /* Slightly larger phase */
-}
+/* --- Responsive Design --- */
 
-#messageArea {
-    margin-top: 12px;
-    color: #881a1a; /* Darker red for messages */
-    font-weight: 500; /* Normal weight for messages */
-    font-size: 0.95em;
-    background-color: #fceeee; /* Lighter red background */
-    padding: 10px 12px;
-    border-radius: 5px;
-    border: 1px solid #f8d7da; /* Reddish border */
-    /* --- CRITICAL FIX --- */
-    min-height: 4em; /* Reserve space for ~2-3 lines. Adjust if needed. */
-    display: flex; /* Use flex to center text vertically if short */
-    align-items: center;
-    box-sizing: border-box; /* Include padding/border in height */
-}
-
-/* --- Responsive Layout --- */
-
-/* Breakpoint when side-by-side becomes too cramped */
-/* (Canvas width + Controls min-width + Gap) -> (700 + 230 + 30 = 960) */
-@media (max-width: 980px) {
-    .main-layout {
-        /* --- CHANGE: Stack vertically below this width --- */
-        flex-direction: column;
-        align-items: center; /* Center items when stacked */
-        gap: 25px; /* Adjust gap for vertical stacking */
+/* Breakpoint for stacking UI below canvas */
+@media (max-width: 1000px) {
+    #game-container {
+        flex-direction: column; /* Stack vertically */
     }
 
-    #gameCanvasContainer {
-        width: 95%; /* Allow canvas to take most of width */
-        max-width: 700px; /* But don't exceed its original size */
-        height: auto;
-        aspect-ratio: 1 / 1; /* Maintain square shape */
-        flex-basis: auto; /* Reset basis */
-        order: 1; /* Ensure canvas is first */
+    #game-canvas-area {
+        flex-grow: 1; /* Takes most of the height */
+        height: 65vh; /* Example: 65% of viewport height */
+        min-height: 300px; /* Ensure minimum height */
     }
 
-    .controls-container {
-        order: 2; /* Ensure controls are below canvas */
-        width: 95%; /* Take similar width to canvas */
-        max-width: 600px; /* Limit controls width */
-        flex-basis: auto; /* Reset basis */
-        /* Optional: Arrange controls side-by-side again */
-        flex-direction: row;
-        gap: 20px;
-        align-items: stretch; /* Make panels same height */
-    }
-
-    .controls, .info {
-        flex: 1; /* Allow panels to share space */
-        min-width: 180px; /* Min width for each panel */
-    }
-}
-
-/* Smaller screens: Stack control panels vertically */
-@media (max-width: 500px) {
-    body {
-        padding: 10px; /* Reduce body padding */
-    }
-    h1 { font-size: 1.5em; margin-bottom: 15px;}
-    .main-layout { gap: 20px; }
-
-    #gameCanvasContainer {
-         width: 100%; /* Use full width */
-         border: none; /* Remove border on small screens */
-         box-shadow: none;
-    }
-
-    .controls-container {
-        flex-direction: column; /* Stack panels */
+    #ui-panel {
         width: 100%; /* Full width */
+        height: 35vh; /* Remaining height */
+        min-height: 250px; /* Minimum height for UI */
+        border-left: none; /* No left border when stacked */
+        border-top: 1px solid #444; /* Add top border */
+        flex-direction: row; /* Arrange sections side-by-side */
+        flex-wrap: wrap; /* Allow sections to wrap */
+        justify-content: space-around; /* Distribute sections */
+        align-items: flex-start;
+        padding: 15px; /* Adjust padding */
         gap: 15px;
     }
 
-    .controls, .info {
-        padding: 10px 15px; /* Reduce padding */
-        min-width: unset; /* Remove min-width */
+    h1 {
+        width: 100%; /* Make title span full width */
+        text-align: center;
+        margin-bottom: 15px;
+        font-size: 1.4em;
     }
 
-    .mode-select {
-         flex-direction: column; /* Stack mode buttons */
-    }
-    .mode-select button {
-        width: 100%;
+    .ui-section {
+        flex-basis: 200px; /* Base width for sections */
+        flex-grow: 1; /* Allow sections to grow */
+        margin-bottom: 15px;
+        min-width: 180px;
     }
 
-    button { font-size: 0.9em; padding: 9px 12px;}
-    h2 { font-size: 1.1em; }
-    p { font-size: 0.85em; }
-    #messageArea { min-height: 3.5em; } /* Adjust min-height */
+    h2 {
+        font-size: 1em;
+        margin-bottom: 10px;
+    }
+
+    #messageArea {
+        min-height: 3.5em; /* Adjust min height */
+    }
+
+    .ui-footer { display: none; } /* Hide footer on smaller layout */
+}
+
+/* Very small screens */
+@media (max-width: 500px) {
+     #game-canvas-area {
+        height: 60vh; /* Less height for canvas */
+     }
+      #ui-panel {
+        height: 40vh; /* More height for UI */
+        flex-direction: column; /* Stack sections vertically again */
+        align-items: stretch;
+        justify-content: flex-start;
+        padding: 10px;
+        overflow-y: auto; /* Ensure scrolling if needed */
+     }
+     .ui-section {
+         flex-basis: auto;
+         min-width: unset;
+         margin-bottom: 10px;
+     }
+     h1 { font-size: 1.3em; margin-bottom: 10px;}
+     h2 { font-size: 1em; margin-bottom: 8px; }
+     button { font-size: 0.9em; padding: 8px 12px;}
+     p { font-size: 0.85em; }
+     #messageArea { min-height: 3em; }
+     .mode-select { flex-direction: column; } /* Stack mode buttons */
+     .mode-select button { width: 100%; }
 }
