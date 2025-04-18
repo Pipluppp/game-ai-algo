@@ -1042,66 +1042,69 @@ function handleMoveInput(targetX, targetY) {
     }
 }
 
+// --- Input Handling Functions ---
+// (MODIFIED handleShootInput for clarity and ensure segment targeting)
 function handleShootInput(clickX, clickY) {
-     if (currentPlanningMode !== 'shoot' || !partialShootPlan || !partialShootPlan.needsInput || playerPlannedAction || gameOverState || isResolving) {
-         console.warn("Ignoring shoot input - not in correct state.");
-         return;
-     }
+    if (currentPlanningMode !== 'shoot' || !partialShootPlan || !partialShootPlan.needsInput || playerPlannedAction || gameOverState || isResolving) {
+        console.warn("Ignoring shoot input - not in correct state.");
+        return;
+    }
 
-     const targetPos = { x: clickX, y: clickY };
-     const startPos = partialShootPlan.lastBendPos;
+    const targetPos = { x: clickX, y: clickY }; // The clicked cell is the target for THIS segment
+    const startPos = partialShootPlan.lastBendPos; // Start from the player or the last bend point
 
-     // Prevent targeting the start cell itself
-     if (targetPos.x === startPos.x && targetPos.y === startPos.y) {
-         setMessage("Cannot target the starting cell for a segment.");
-         return;
-     }
+    // Prevent targeting the start cell itself
+    if (targetPos.x === startPos.x && targetPos.y === startPos.y) {
+        setMessage("Cannot target the starting cell for a segment.");
+        return;
+    }
 
-     const segmentResult = calculateShotPathSegment(startPos, targetPos, aiPos);
+    // Check if the segment from startPos to targetPos is valid (doesn't hit walls before targetPos)
+    // The opponentPos is needed by calculateShotPathSegment to check for hits along the way, but validity depends on reaching targetPos.
+    const segmentResult = calculateShotPathSegment(startPos, targetPos, aiPos);
 
-     if (!segmentResult.isValidSegment) {
-         setMessage("Invalid target: Path segment is blocked.");
-         hoverPath = []; hoverPathIsValid = false; // Clear hover state on invalid click
-         renderHighlights();
-         return;
-     }
+    if (!segmentResult.isValidSegment) {
+        // The path *to the clicked cell* is blocked by a wall.
+        setMessage("Invalid target: Path segment is blocked by a wall.");
+        hoverPath = []; // Clear hover state on invalid click
+        hoverPathIsValid = false;
+        renderHighlights(); // Update highlights to remove invalid hover path
+        return;
+    }
 
-     // Valid segment found
-     partialShootPlan.segments.push({ path: segmentResult.path, endPos: targetPos });
-     partialShootPlan.path.push(...segmentResult.path); // Add new segment path to the full path
-     partialShootPlan.lastBendPos = targetPos; // Update last bend position
+    // --- Valid segment selected ---
+    // Add the *exact path* calculated for this segment to the partial plan
+    partialShootPlan.segments.push({ path: segmentResult.path, endPos: targetPos });
+    // The full path is rebuilt from segments, ensure no duplicates if targetPos included in path
+    // Rebuild the full path from all segment paths collected so far
+    partialShootPlan.path = partialShootPlan.segments.flatMap(seg => seg.path);
 
-     const bendsMade = partialShootPlan.segments.length - 1; // Bends are the intermediate points
+    // Update the last bend position to the *clicked* target cell
+    partialShootPlan.lastBendPos = targetPos;
 
-     if (bendsMade < partialShootPlan.maxBends) {
-         // Plan another segment/bend
-         partialShootPlan.needsInput = true;
-         setMessage(`Level ${playerWeaponLevel} Shot: Bend ${bendsMade + 1} at ${targetPos.x},${targetPos.y}. Click target cell for segment ${bendsMade + 2}.`);
-         hoverPos = null; // Clear hover state
-         hoverPath = [];
-         hoverPathIsValid = false;
-         renderHighlights(); // Update highlights to show current planned path
-     } else {
-         // Max bends reached, finalize the shot plan
-         partialShootPlan.needsInput = false;
-         const finalPlan = {
-             type: 'shoot',
-             targetPoints: partialShootPlan.segments.map(seg => seg.endPos), // End points of segments are the bend points + final target
-             path: partialShootPlan.path, // The full path taken by the shot
-             // Direction and bends can be derived from targetPoints/path if needed later, but not strictly necessary for execution
-         };
+    const bendsMade = partialShootPlan.segments.length - 1; // Bends are the intermediate points
 
-         // Simple attempt to determine initial direction for visual orientation if needed
-         // (Less critical now that movement is resolved first)
-         // if (finalPlan.path.length > 0) {
-         //      const firstStep = finalPlan.path[0];
-         //      finalPlan.direction = { dx: Math.sign(firstStep.x - playerPos.x), dy: Math.sign(firstStep.y - playerPos.y) };
-         // }
+    if (bendsMade < partialShootPlan.maxBends) {
+        // Plan another segment/bend
+        partialShootPlan.needsInput = true;
+        setMessage(`Level ${playerWeaponLevel} Shot: Bend ${bendsMade + 1} at ${targetPos.x},${targetPos.y}. Click target cell for segment ${bendsMade + 2}.`);
+        hoverPos = null; // Clear hover state
+        hoverPath = [];
+        hoverPathIsValid = false;
+        renderHighlights(); // Update highlights to show current planned path
+    } else {
+        // Max bends reached, finalize the shot plan
+        partialShootPlan.needsInput = false;
+        const finalPlan = {
+            type: 'shoot',
+            targetPoints: partialShootPlan.segments.map(seg => seg.endPos), // End points of segments are the bend points + final target
+            path: partialShootPlan.path, // The full path taken by the shot
+        };
 
-         playerPlannedAction = finalPlan;
-         setMessage("Shoot planned. Waiting for AI...");
-         lockPlayerAction();
-     }
+        playerPlannedAction = finalPlan;
+        setMessage("Shoot planned. Waiting for AI...");
+        lockPlayerAction();
+    }
 }
 
 function lockPlayerAction() {
@@ -1124,6 +1127,7 @@ function calculateShotPathSegment(startPos, targetPos, opponentPos) {
     let path = [];
     let currentPos = { ...startPos };
     let isValidSegment = true;
+    let hitTargetAlongSegment = false; // Renamed for clarity
 
     const dxTotal = targetPos.x - startPos.x;
     const dyTotal = targetPos.y - startPos.y;
@@ -1140,44 +1144,39 @@ function calculateShotPathSegment(startPos, targetPos, opponentPos) {
         return { path: [], isValidSegment: false, hitTarget: false }; // start === target or no movement
     }
 
-    // Traverse step by step
+    // Traverse step by step *up to the target cell*
     while (currentPos.x !== targetPos.x || currentPos.y !== targetPos.y) {
         const nextX = currentPos.x + stepDir.dx;
         const nextY = currentPos.y + stepDir.dy;
 
         if (!isValid(nextX, nextY) || isWall(nextX, nextY)) {
-            isValidSegment = false; // Hit wall or went off grid
-            // path.push({ x: nextX, y: nextY }); // Optionally add the wall cell to the path
-            break; // Stop traversal
+            isValidSegment = false; // Hit wall or went off grid before reaching targetPos
+            // path.push({ x: nextX, y: nextY }); // Optionally add the wall cell
+            break; // Stop traversal for this segment
         }
 
         currentPos = { x: nextX, y: nextY };
         path.push({ ...currentPos }); // Add the valid step to the path
 
-        // Check if opponent is hit *at this cell*
+        // Check if opponent is hit *at this cell* but DO NOT stop
         if (currentPos.x === opponentPos.x && currentPos.y === opponentPos.y) {
-             // Hit the opponent! The path ends here logically for damage calculation,
-             // but for visualization, we might continue to the target or slightly past.
-             // For now, stop path calculation here as the segment is valid up to the hit.
-             // The full path calculation will handle the 'hitTarget' flag.
+            hitTargetAlongSegment = true; // Mark that the opponent was on this segment path
+            // --- DO NOT BREAK HERE --- allow shot to continue to targetPos
+        }
+
+        // If we reached the target cell (should be redundant due to while loop condition, but safe check)
+        if (currentPos.x === targetPos.x && currentPos.y === targetPos.y) {
              break;
         }
-         // If we reached the target cell, the segment is complete
-         if (currentPos.x === targetPos.x && currentPos.y === targetPos.y) {
-             break;
-         }
     }
 
-     // A segment is only valid if it reaches the target cell AND didn't hit a wall/go off-grid before the target.
-     // The check `currentPos.x === targetPos.x && currentPos.y === targetPos.y` ensures it reached the target.
-     // The `isValidSegment = false` flag handles hitting walls.
-    const hitTarget = path.some(p => p.x === opponentPos.x && p.y === opponentPos.y);
+    // A segment is valid if it reaches the target cell AND didn't hit a wall/go off-grid before the target.
+    // The check `currentPos.x === targetPos.x && currentPos.y === targetPos.y` ensures it reached the target.
+    // The `isValidSegment = false` flag handles hitting walls.
+    const reachedTargetCell = isValidSegment && (currentPos.x === targetPos.x && currentPos.y === targetPos.y);
 
-    // The segment is valid *only* if it reached the target cell without hitting a wall first.
-    // It doesn't matter if it hit the opponent *along the way* to the target cell.
-     const reachedTargetCell = currentPos.x === targetPos.x && currentPos.y === targetPos.y;
-
-    return { path: path, isValidSegment: isValidSegment && reachedTargetCell, hitTarget: hitTarget };
+    // Note: The `hitTarget` returned here now means "was the opponent on any part of this specific segment's valid path?"
+    return { path: path, isValidSegment: reachedTargetCell, hitTarget: hitTargetAlongSegment };
 }
 
 
@@ -1185,39 +1184,41 @@ function calculateFullPathFromTargets(startPos, targetPoints, opponentPos) {
     let fullPath = [];
     let currentPos = { ...startPos };
     let pathIsValid = true;
-    let finalHitTarget = false;
+    let finalHitTarget = false; // Was the opponent hit *anywhere* on the *entire valid* path?
 
     for (const targetPoint of targetPoints) {
+        // Calculate segment from the *previous* target point (or start) to the *current* target point
         const segmentResult = calculateShotPathSegment(currentPos, targetPoint, opponentPos);
 
-        // The segment must be valid *to the targetPoint* without hitting a wall.
-        // It's okay if it hits the opponent *at* the targetPoint or along the path to it.
-        if (!segmentResult.isValidSegment) {
-            // If a segment is invalid, the whole path is invalid past the last valid point.
-            // We can append the path up to the invalid step for visualization if desired,
-            // but for logic, the path stops being valid here.
-            // Let's append the path calculated by the segment function (which stops at the invalid cell or opponent)
+        // Append the calculated path for this segment, even if it's invalid (for potential visual feedback if needed)
+        // However, only add to the *logical* fullPath if the segment was valid.
+        // Let's refine: The fullPath should only contain the valid path steps.
+        if (segmentResult.isValidSegment) {
             fullPath.push(...segmentResult.path);
-            pathIsValid = false;
-            break; // The path is broken, stop
         }
 
-        // Segment is valid. Add its path to the full path.
-        fullPath.push(...segmentResult.path);
-        currentPos = targetPoint; // Move the current position to the *end* of the valid segment
 
-        // Check if the opponent was hit by this segment
+        // The entire path becomes invalid if *any* segment fails to reach its target point without hitting a wall.
+        if (!segmentResult.isValidSegment) {
+            pathIsValid = false;
+            // If a segment is invalid, we might still want the path up to the point of failure for visualization.
+            // The current logic correctly stops appending valid path segments.
+            break; // The overall path is broken, stop processing further segments
+        }
+
+        // Segment is valid. Update the starting point for the next segment.
+        currentPos = targetPoint;
+
+        // Check if the opponent was hit by this *valid* segment
         if (segmentResult.hitTarget) {
-             finalHitTarget = true; // The shot hits the opponent somewhere along the path
-             // We can stop adding segments if the opponent is hit? Or calculate the full visual path anyway?
-             // Let's calculate the full visual path up to the final target point even if hit along the way.
-             // The 'finalHitTarget' flag indicates if a hit occurred anywhere on the valid path.
+             finalHitTarget = true; // Mark that the opponent was hit somewhere along the valid path
+             // Don't break, continue calculating the full path for visualization
         }
     }
 
-    // The path is valid only if *all* segments up to the final target point were valid.
-    // The hitTarget flag is true if the opponent was on any valid cell in the valid path.
-     return { path: fullPath, isValid: pathIsValid, hitTarget: finalHitTarget };
+    // The path is valid only if *all* segments were valid (reached their target points).
+    // The hitTarget flag is true if the opponent was on any cell in the valid path segments.
+    return { path: fullPath, isValid: pathIsValid, hitTarget: finalHitTarget };
 }
 
 
