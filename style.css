@@ -3,11 +3,12 @@ html, body {
     height: 100%;
     margin: 0;
     padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-    background-color: #1a1d21; /* Dark background */
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; /* More modern font stack */
+    background: linear-gradient(to bottom right, #1a1d21, #0f1113); /* Gradient background */
     color: #e0e0e0; /* Light text */
     overflow: hidden; /* Prevent body scrollbars */
     font-size: 16px; /* Base font size */
+    line-height: 1.5;
 }
 
 * {
@@ -24,21 +25,21 @@ html, body {
 /* --- Game Canvas Area --- */
 #game-canvas-area {
     flex-grow: 1; /* Takes up remaining space */
-    position: relative; /* For potential absolute children if needed */
+    position: relative;
     display: flex;
     justify-content: center;
     align-items: center;
-    overflow: hidden; /* Ensure canvas doesn't overflow */
+    overflow: hidden;
     background-color: #111315; /* Slightly darker canvas background */
+    box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.5); /* Inner shadow for depth */
 }
 
 #gameCanvasContainer {
     width: 100%;
     height: 100%;
-    max-width: 100%; /* Ensure it doesn't exceed parent */
+    max-width: 100%;
     max-height: 100%;
-    /* Add perspective/visual depth if desired */
-    /* perspective: 1000px; */
+    /* Adding subtle perspective might enhance the 3D feel if desired, but requires parent transforms */
 }
 
 #threeCanvas {
@@ -52,11 +53,15 @@ html, body {
     width: 320px; /* Fixed width for the UI panel */
     flex-shrink: 0; /* Prevent panel from shrinking */
     background-color: #282c34; /* Dark UI panel background */
+    /* Add a subtle frosted glass effect if supported and desired */
+    /* backdrop-filter: blur(5px); */
+    /* background-color: rgba(40, 44, 52, 0.85); */ /* Slightly transparent */
     padding: 25px 20px;
     display: flex;
     flex-direction: column;
     overflow-y: auto; /* Allow scrolling if content overflows height */
     border-left: 1px solid #444; /* Separator */
+    box-shadow: -5px 0 15px rgba(0, 0, 0, 0.3); /* Shadow for panel separation */
 }
 
 h1 {
@@ -64,125 +69,157 @@ h1 {
     color: #61dafb; /* Accent color for title */
     margin-top: 0;
     margin-bottom: 25px;
-    font-size: 1.6em;
-    font-weight: 600;
-    letter-spacing: 1px;
+    font-size: 1.8em; /* Slightly larger title */
+    font-weight: 700; /* Bolder title */
+    letter-spacing: 1.5px;
+    text-shadow: 0 0 5px rgba(97, 218, 251, 0.3); /* Subtle text shadow */
 }
 
 h2 {
     color: #abb2bf; /* Lighter grey for subheadings */
     margin-top: 0;
     margin-bottom: 15px;
-    font-size: 1.1em;
-    font-weight: 500;
-    border-bottom: 1px solid #4b5263; /* Darker separator */
+    font-size: 1.2em; /* Slightly larger subheading */
+    font-weight: 600; /* Bolder subheading */
+    border-bottom: 2px solid #4b5263; /* Darker, thicker separator */
     padding-bottom: 8px;
+    letter-spacing: 0.5px;
 }
 
 .ui-section {
-    margin-bottom: 25px; /* Space between sections */
+    margin-bottom: 30px; /* More space between sections */
+    background-color: #323841; /* Slightly lighter background for sections */
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #4b5263;
+    box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.3);
 }
 
 p {
     margin-top: 8px;
-    margin-bottom: 12px;
+    margin-bottom: 8px; /* Adjust margin */
     color: #c8cdd4; /* Standard text color */
-    font-size: 0.95em;
-    line-height: 1.6;
+    font-size: 1em; /* Base font size */
 }
 
 /* Status/Info Specifics */
 #phaseIndicator {
-    font-weight: 600;
+    font-weight: 700;
     color: #e5c07b; /* Yellowish for phase */
-    font-size: 1em;
+    font-size: 1.1em;
+    text-shadow: 0 0 3px rgba(229, 192, 123, 0.3);
+}
+
+#messageAreaContainer { /* Style the container, not the paragraph */
+     margin-top: 15px;
+     background: linear-gradient(to bottom right, #3c3131, #2a1f1f); /* Darker, gradient background */
+     padding: 12px 15px;
+     border-radius: 6px;
+     border: 1px solid #5c3f3f;
+     box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.4);
+     /* --- CRITICAL: Reserve space --- */
+     min-height: 5em; /* Reserve space for ~3 lines */
+     display: flex;
+     align-items: center;
+     box-sizing: border-box;
 }
 
 #messageArea {
-    margin-top: 10px;
-    color: #e06c75; /* Reddish for messages */
-    font-weight: 500;
-    font-size: 0.95em;
-    background-color: #322626; /* Dark red background */
-    padding: 10px 12px;
-    border-radius: 5px;
-    border: 1px solid #5c3f3f;
-    /* --- CRITICAL: Reserve space --- */
-    min-height: 4.5em; /* Reserve space for ~3 lines */
-    display: flex;
-    align-items: center;
-    box-sizing: border-box;
+     margin: 0; /* Remove paragraph default margin */
+     color: #e06c75; /* Reddish for messages */
+     font-weight: 500;
+     font-size: 1em;
+     line-height: 1.5;
 }
+
 
 /* Controls Specifics */
 #weaponLevelInfo, #aiWeaponLevelInfo {
-    font-weight: 500;
+    font-weight: 600;
     color: #98c379; /* Greenish for levels */
+    font-size: 1em;
+    margin-bottom: 5px; /* Less space below levels */
+    text-shadow: 0 0 3px rgba(152, 195, 121, 0.3);
 }
 
 /* Buttons */
 button {
-    padding: 10px 16px;
-    font-size: 1em;
-    font-weight: 500;
+    padding: 12px 20px; /* Increased padding */
+    font-size: 1.05em; /* Slightly larger font */
+    font-weight: 600; /* Bolder text */
     cursor: pointer;
-    border: 1px solid #5c6370; /* Button border */
-    border-radius: 5px;
-    background-color: #3a3f4b; /* Darker button background */
+    border: none; /* Remove default border */
+    border-radius: 6px; /* Slightly more rounded corners */
+    background: linear-gradient(to bottom, #4b5263, #3a3f4b); /* Gradient background */
     color: #d0d8e2; /* Light button text */
     display: block;
     width: 100%;
     box-sizing: border-box;
-    margin-bottom: 10px;
+    margin-bottom: 12px; /* More space between buttons */
     text-align: center;
-    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.1s ease;
+    transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease, opacity 0.2s ease;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    letter-spacing: 0.5px;
 }
 
 button:hover {
-    background-color: #4b5263;
-    border-color: #61dafb; /* Accent border on hover */
+    background: linear-gradient(to bottom, #5c6370, #4b5263);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
 }
 
 button:active {
-    transform: translateY(1px); /* Subtle press effect */
+    transform: translateY(2px); /* Subtle press effect */
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
+button#btnReset {
+     background: linear-gradient(to bottom, #dc3545, #c82333); /* Red gradient for reset */
+     border: 1px solid #b02a37;
+}
+button#btnReset:hover {
+    background: linear-gradient(to bottom, #c82333, #b02a37);
+}
 
 button:disabled {
     cursor: not-allowed;
-    opacity: 0.5;
-    background-color: #31353f;
-    border-color: #4b5263;
+    opacity: 0.6; /* Slightly more opaque when disabled */
+    background: linear-gradient(to bottom, #31353f, #2a2e37);
+    box-shadow: none;
     transform: none;
 }
 
 .mode-select {
     margin-bottom: 15px;
     display: flex;
-    gap: 10px;
+    gap: 15px; /* More space between mode buttons */
 }
 
 .mode-select button {
     flex: 1; /* Share space */
+    margin-bottom: 0; /* Remove bottom margin for flex items */
 }
 
 .mode-button.active {
-    background-color: #61afef; /* Blue accent for active mode */
+    background: linear-gradient(to bottom, #61afef, #4094d1); /* Blue gradient for active mode */
     color: #1e2227; /* Dark text on active */
-    border-color: #61afef;
-    font-weight: 600;
+    border: 1px solid #2188b8;
+    font-weight: 700; /* Bolder active text */
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 0 0 10px rgba(97, 175, 239, 0.5); /* Enhanced active shadow */
 }
 .mode-button.active:hover {
-    background-color: #56a1d8;
+    background: linear-gradient(to bottom, #56a1d8, #3985bd);
+     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5), 0 0 12px rgba(97, 175, 239, 0.6);
 }
 
-/* Footer (Optional) */
+/* Footer */
 .ui-footer {
     margin-top: auto; /* Push footer to bottom */
     padding-top: 20px;
-    font-size: 0.8em;
+    font-size: 0.85em;
     text-align: center;
     color: #5c6370;
+    border-top: 1px solid #444;
+    text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
 }
 
 
@@ -198,12 +235,13 @@ button:disabled {
         flex-grow: 1; /* Takes most of the height */
         height: 65vh; /* Example: 65% of viewport height */
         min-height: 300px; /* Ensure minimum height */
+         box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.5), 0 5px 15px rgba(0, 0, 0, 0.3); /* Add bottom shadow when stacked */
     }
 
     #ui-panel {
         width: 100%; /* Full width */
         height: 35vh; /* Remaining height */
-        min-height: 250px; /* Minimum height for UI */
+        min-height: 280px; /* Minimum height for UI */
         border-left: none; /* No left border when stacked */
         border-top: 1px solid #444; /* Add top border */
         flex-direction: row; /* Arrange sections side-by-side */
@@ -211,58 +249,86 @@ button:disabled {
         justify-content: space-around; /* Distribute sections */
         align-items: flex-start;
         padding: 15px; /* Adjust padding */
-        gap: 15px;
+        gap: 15px 20px; /* Row and column gap */
+        box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.3); /* Shadow for panel separation */
     }
 
     h1 {
         width: 100%; /* Make title span full width */
         text-align: center;
-        margin-bottom: 15px;
-        font-size: 1.4em;
+        margin-bottom: 20px;
+        font-size: 1.6em;
     }
 
     .ui-section {
-        flex-basis: 200px; /* Base width for sections */
+        flex-basis: 250px; /* Base width for sections */
         flex-grow: 1; /* Allow sections to grow */
-        margin-bottom: 15px;
-        min-width: 180px;
+        margin-bottom: 0; /* Remove bottom margin */
+        min-width: 200px;
+        padding: 12px;
     }
 
     h2 {
-        font-size: 1em;
+        font-size: 1.1em;
         margin-bottom: 10px;
+        border-bottom: 1px solid #4b5263;
     }
 
-    #messageArea {
-        min-height: 3.5em; /* Adjust min height */
-    }
+    #messageAreaContainer { min-height: 4em; margin-top: 10px; }
+    #messageArea { font-size: 0.95em; }
+
+    button { padding: 10px 15px; font-size: 1em; margin-bottom: 8px;}
+    button:last-child { margin-bottom: 0; } /* Remove margin on last button in section */
+
+    .mode-select { gap: 10px; margin-bottom: 10px;}
 
     .ui-footer { display: none; } /* Hide footer on smaller layout */
 }
 
+/* Tablet landscape and similar (adjust section basis) */
+@media (max-width: 1200px) and (min-width: 1001px) {
+    #ui-panel {
+        width: 280px; /* Slightly narrower panel on larger screens */
+    }
+    h1 { font-size: 1.6em; }
+    h2 { font-size: 1.1em; }
+    .ui-section { padding: 15px;}
+    button { padding: 10px 16px; font-size: 1em;}
+}
+
+
 /* Very small screens */
 @media (max-width: 500px) {
+     html, body { font-size: 14px; } /* Smaller base font */
+
      #game-canvas-area {
-        height: 60vh; /* Less height for canvas */
+        height: 55vh; /* Less height for canvas */
+        min-height: 250px;
      }
       #ui-panel {
-        height: 40vh; /* More height for UI */
+        height: 45vh; /* More height for UI */
+        min-height: 300px;
         flex-direction: column; /* Stack sections vertically again */
         align-items: stretch;
         justify-content: flex-start;
         padding: 10px;
         overflow-y: auto; /* Ensure scrolling if needed */
+        gap: 10px;
      }
+     h1 { font-size: 1.5em; margin-bottom: 10px;}
+     h2 { font-size: 1.1em; margin-bottom: 8px; }
      .ui-section {
          flex-basis: auto;
          min-width: unset;
          margin-bottom: 10px;
+         padding: 10px;
      }
-     h1 { font-size: 1.3em; margin-bottom: 10px;}
-     h2 { font-size: 1em; margin-bottom: 8px; }
-     button { font-size: 0.9em; padding: 8px 12px;}
-     p { font-size: 0.85em; }
-     #messageArea { min-height: 3em; }
-     .mode-select { flex-direction: column; } /* Stack mode buttons */
-     .mode-select button { width: 100%; }
+     #messageAreaContainer { min-height: 3.5em; margin-top: 8px; padding: 8px 10px;}
+     #messageArea { font-size: 0.9em; }
+
+     p { font-size: 0.9em; margin-bottom: 6px;}
+
+     button { font-size: 0.95em; padding: 8px 12px; margin-bottom: 8px;}
+     .mode-select { flex-direction: column; gap: 8px;} /* Stack mode buttons */
+     .mode-select button { width: 100%; margin-bottom: 0;}
 }
