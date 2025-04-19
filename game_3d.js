@@ -31,7 +31,8 @@ const POWERUP_SPAWN_CHANCE = 0.6;
 // Timing Constants (milliseconds)
 const SHOT_FLASH_DURATION = 600; // Slightly longer flash
 const MOVEMENT_DURATION = 400; // Slightly slower movement
-const RESOLVE_STEP_DELAY = 200; // More delay between steps
+const AI_THINK_DELAY = 500; // Delay before AI makes its move
+const ACTION_RESOLVE_DELAY = 200; // Delay after an action resolves before next turn starts
 
 // AI constants
 const AI_MAX_BEND_CHECK_DEPTH = 2; // How many bends the AI plans ahead for shooting
@@ -105,23 +106,22 @@ const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 let intersectionPlane;
 
-// --- Game State --- (Same as before)
+// --- Game State ---
 let grid = [];
 let playerPos = { x: -1, y: -1 };
 let aiPos = { x: -1, y: -1 };
 let playerWeaponLevel = 1;
 let aiWeaponLevel = 1;
 let powerUpPositions = [];
-let gamePhase = 'planning';
-let currentPlanningMode = 'move';
-let playerPlannedAction = null;
-let aiPlannedAction = null;
+let gamePhase = 'playerTurn'; // Initial phase: Player's turn
+let currentPlayer = 'player'; // Who is currently acting
+let currentPlanningMode = 'move'; // Player's chosen action type (move/shoot)
 let hoverPos = null;
 let hoverPath = [];
 let hoverPathIsValid = false;
-let partialShootPlan = null;
+let partialShootPlan = null; // Holds player's shooting plan as they click
 let gameOverState = null;
-let isResolving = false;
+let isResolving = false; // True while an action (move/shoot anim) is in progress
 
 // --- Initialization ---
 
@@ -150,8 +150,7 @@ function initThreeJS() {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Soft shadows
 
     // --- Lighting ---
-    // Primary directional light for global illumination and shadows
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2); // Brighter
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
     directionalLight.position.set(GRID_SIZE * CELL_3D_SIZE * 0.6, GRID_SIZE * CELL_3D_SIZE * 1.2, GRID_SIZE * CELL_3D_SIZE * 0.5);
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.width = 2048;
@@ -163,45 +162,32 @@ function initThreeJS() {
     directionalLight.shadow.camera.right = shadowCamSize;
     directionalLight.shadow.camera.top = shadowCamSize;
     directionalLight.shadow.camera.bottom = -shadowCamSize;
-    // directionalLight.shadow.bias = -0.0001; // Optional: adjust bias to fix shadow acne
     scene.add(directionalLight);
 
-    // Ambient light
-    const ambientLight = new THREE.AmbientLight(0x808080, 0.6); // Slightly warmer, less intense ambient
+    const ambientLight = new THREE.AmbientLight(0x808080, 0.6);
     scene.add(ambientLight);
 
-     // Hemisphere light for subtle fill from sky/ground
-     const hemisphereLight = new THREE.HemisphereLight(0x4488bb, 0x080820, 0.5); // Sky color, ground color, intensity
-     scene.add(hemisphereLight);
+    const hemisphereLight = new THREE.HemisphereLight(0x4488bb, 0x080820, 0.5);
+    scene.add(hemisphereLight);
 
     // --- Post-processing ---
     composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
 
-    // Bloom Pass: Makes emissive areas glow
     const bloomPass = new UnrealBloomPass(
         new THREE.Vector2(canvasContainer.clientWidth, canvasContainer.clientHeight),
-        1.0, // strength (adjust for intensity)
-        0.4, // radius (adjust for spread)
-        0.85 // threshold (only pixels brighter than this value glow)
+        1.0, // strength
+        0.4, // radius
+        0.85 // threshold
     );
     composer.addPass(bloomPass);
-
-    // SSAO Pass (Optional, can be performance heavy and tricky to tune)
-    // const ssaoPass = new SSAOPass(scene, camera, canvasContainer.clientWidth, canvasContainer.clientHeight);
-    // ssaoPass.kernelRadius = 8; // Adjust radius
-    // ssaoPass.minDistance = 0.005; // Adjust based on scene scale
-    // ssaoPass.maxDistance = 0.05; // Adjust based on scene scale
-    // ssaoPass.output = SSAOPass.OUTPUT.Default; // Or SSAOPass.OUTPUT.SAO to visualize the effect
-    // composer.addPass(ssaoPass);
-
 
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.1;
     controls.target.set(0, 0, 0);
     controls.maxPolarAngle = Math.PI / 2 - 0.05;
-    controls.minDistance = CELL_3D_SIZE * 3; // Closer zoom allowed
+    controls.minDistance = CELL_3D_SIZE * 3;
     controls.maxDistance = CELL_3D_SIZE * GRID_SIZE * 1.5;
 
     gameBoardGroup = new THREE.Group();
@@ -212,7 +198,7 @@ function initThreeJS() {
     const planeMat = new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide });
     intersectionPlane = new THREE.Mesh(planeGeom, planeMat);
     intersectionPlane.rotation.x = -Math.PI / 2;
-    intersectionPlane.position.y = -0.04; // Place slightly below floor
+    intersectionPlane.position.y = -0.04;
     scene.add(intersectionPlane);
 
     window.addEventListener('resize', onWindowResize, false);
@@ -222,13 +208,12 @@ function initThreeJS() {
 function onWindowResize() {
     const width = canvasContainer.clientWidth;
     const height = canvasContainer.clientHeight;
-    if (width === 0 || height === 0) return; // Prevent errors if container is hidden
+    if (width === 0 || height === 0) return;
 
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     renderer.setSize(width, height);
-    composer.setSize(width, height); // Update composer size too
-    // If using SSAOPass, update its size as well: ssaoPass.setSize(width, height);
+    composer.setSize(width, height);
 }
 
 function initGameLogic() {
@@ -252,14 +237,14 @@ function initGameLogic() {
     aiWeaponLevel = 1;
     powerUpPositions = [];
     powerupMeshes = [];
-    gamePhase = 'planning';
-    playerPlannedAction = null;
-    aiPlannedAction = null;
+    currentPlayer = 'player'; // Player starts
+    gamePhase = 'playerTurn';
+    currentPlanningMode = 'move'; // Default to move
     hoverPos = null;
     hoverPath = [];
     hoverPathIsValid = false;
     partialShootPlan = null;
-    gameOverState = null; // Clear game over state on reset
+    gameOverState = null;
     isResolving = false;
 
     createUnits3D();
@@ -267,18 +252,16 @@ function initGameLogic() {
     // Spawn some initial powerups
     maybeSpawnPowerup(); maybeSpawnPowerup(); maybeSpawnPowerup(); maybeSpawnPowerup();
 
-
-    setMessage("Plan your move.");
+    setMessage("Your Turn: Plan your move or shot.");
     updatePhaseIndicator();
     updateWeaponLevelInfo();
-    enablePlanningControls();
+    enablePlanningControls(); // Enable controls for the player
     clearHighlights();
 
-    // Adjust controls target to be centered on the grid
     controls.target.set(0, 0, 0);
     controls.update();
 
-    setPlanningMode('move');
+    setPlanningMode('move'); // Set initial mode visuals
 }
 
 function setupInputListeners() {
@@ -289,8 +272,7 @@ function setupInputListeners() {
     canvasContainer.addEventListener('mousemove', handleCanvasMouseMove);
 }
 
-// --- Grid Generation Functions ---
-// (Keep existing grid generation, connection check, start position finding)
+// --- Grid Generation Functions --- (Keep existing grid generation, connection check, start position finding)
 function generateGrid() {
     let attempts = 0;
     while (attempts < 10) {
@@ -498,7 +480,6 @@ function clearBoard3D() {
          disposeMesh(child);
     });
 
-    // Dispose of level indicators separately if they are sprites not directly in gameBoardGroup children list
      disposeSprite(playerLevelIndicator);
      disposeSprite(aiLevelIndicator);
 
@@ -511,8 +492,7 @@ function clearBoard3D() {
     aiLevelIndicator = null;
     activeHighlights = [];
 
-     // Dispose of active lasers
-    activeLasers.slice().forEach(laser => { // Iterate over a copy
+    activeLasers.slice().forEach(laser => {
         disposeMesh(laser);
     });
     activeLasers = [];
@@ -522,7 +502,7 @@ function createBoard3D() {
     floorMeshes = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null));
     wallMeshes = [];
 
-    const floorGeom = new THREE.BoxGeometry(CELL_3D_SIZE, 0.2, CELL_3D_SIZE); // Slightly thicker floor
+    const floorGeom = new THREE.BoxGeometry(CELL_3D_SIZE, 0.2, CELL_3D_SIZE);
     const wallGeom = new THREE.BoxGeometry(CELL_3D_SIZE, WALL_HEIGHT, CELL_3D_SIZE);
 
     for (let y = 0; y < GRID_SIZE; y++) {
@@ -530,9 +510,9 @@ function createBoard3D() {
             const pos = get3DPosition(x, y);
 
             if (grid[y][x] === 'floor') {
-                const floorMesh = new THREE.Mesh(floorGeom, floorMaterial); // Use shared material instance
+                const floorMesh = new THREE.Mesh(floorGeom, floorMaterial);
                 floorMesh.position.copy(pos);
-                floorMesh.position.y = -0.1; // Position below y=0 grid plane
+                floorMesh.position.y = -0.1;
                 floorMesh.castShadow = false;
                 floorMesh.receiveShadow = true;
                 floorMesh.userData = { gridX: x, gridY: y, type: 'floor' };
@@ -540,108 +520,95 @@ function createBoard3D() {
                 floorMeshes[y][x] = floorMesh;
             }
             else if (grid[y][x] === 'wall') {
-                 // Optionally add a base for walls if floor material isn't covering
-                 // const baseMesh = new THREE.Mesh(floorGeom, floorMaterial);
-                 // baseMesh.position.copy(pos);
-                 // baseMesh.position.y = -0.1;
-                 // baseMesh.receiveShadow = true;
-                 // gameBoardGroup.add(baseMesh);
-
-                const wallMesh = new THREE.Mesh(wallGeom, wallMaterial); // Use shared material instance
+                const wallMesh = new THREE.Mesh(wallGeom, wallMaterial);
                 wallMesh.position.copy(pos);
-                wallMesh.position.y = WALL_HEIGHT / 2; // Position correctly above y=0 grid plane
+                wallMesh.position.y = WALL_HEIGHT / 2;
                 wallMesh.castShadow = true;
                 wallMesh.receiveShadow = true;
                 wallMesh.userData = { gridX: x, gridY: y, type: 'wall' };
                 gameBoardGroup.add(wallMesh);
                 wallMeshes.push(wallMesh);
-                floorMeshes[y][x] = null; // Wall cell doesn't have a floor mesh reference
+                floorMeshes[y][x] = null;
             }
         }
     }
 }
 
 function createUnits3D() {
-    const playerUnitHeight = CELL_3D_SIZE * 0.9; // Taller player
+    const playerUnitHeight = CELL_3D_SIZE * 0.9;
     const playerUnitRadius = CELL_3D_SIZE * 0.3;
 
-    const aiUnitHeight = CELL_3D_SIZE * 1.0; // Taller AI
+    const aiUnitHeight = CELL_3D_SIZE * 1.0;
     const aiUnitRadius = CELL_3D_SIZE * 0.4;
 
 
     const playerGeom = new THREE.CapsuleGeometry(playerUnitRadius, playerUnitHeight - playerUnitRadius * 2, 4, 10);
-    playerMesh = new THREE.Mesh(playerGeom, playerMaterial); // Use shared material instance
+    playerMesh = new THREE.Mesh(playerGeom, playerMaterial);
     playerMesh.castShadow = true;
-    playerMesh.receiveShadow = false; // Player doesn't receive shadow from itself/grid
-    const playerPos3D = get3DPosition(playerPos.x, playerPos.y, playerUnitHeight / 2); // Position centered vertically
+    playerMesh.receiveShadow = false;
+    const playerPos3D = get3DPosition(playerPos.x, playerPos.y, playerUnitHeight / 2);
     playerMesh.position.copy(playerPos3D);
     playerMesh.userData = { type: 'player' };
     gameBoardGroup.add(playerMesh);
 
-    // Level indicator sprite
     playerLevelIndicator = createLevelTextMesh(playerWeaponLevel);
-    playerLevelIndicator.position.set(0, playerUnitHeight * 0.6, 0); // Position above unit
+    playerLevelIndicator.position.set(0, playerUnitHeight * 0.6, 0);
     playerMesh.add(playerLevelIndicator);
 
 
-    const aiGeom = new THREE.ConeGeometry(aiUnitRadius, aiUnitHeight, 8); // More segments for smoother cone base
-    aiMesh = new THREE.Mesh(aiGeom, aiMaterial); // Use shared material instance
+    const aiGeom = new THREE.ConeGeometry(aiUnitRadius, aiUnitHeight, 8);
+    aiMesh = new THREE.Mesh(aiGeom, aiMaterial);
     aiMesh.castShadow = true;
-    aiMesh.receiveShadow = false; // AI doesn't receive shadow from itself/grid
-     // Cone geometry vertex 0 is the tip, base is at -height/2. Adjust Y.
+    aiMesh.receiveShadow = false;
     const aiPos3D = get3DPosition(aiPos.x, aiPos.y, aiUnitHeight / 2);
     aiMesh.position.copy(aiPos3D);
     aiMesh.userData = { type: 'ai' };
     gameBoardGroup.add(aiMesh);
 
-    // Level indicator sprite
     aiLevelIndicator = createLevelTextMesh(aiWeaponLevel);
-    aiLevelIndicator.position.set(0, aiUnitHeight * 0.6, 0); // Position above unit
+    aiLevelIndicator.position.set(0, aiUnitHeight * 0.6, 0);
     aiMesh.add(aiLevelIndicator);
 
-    updateWeaponLevelVisuals(); // Set initial emissive intensities
+    updateWeaponLevelVisuals();
 }
 
 function createLevelTextMesh(level) {
      const canvas = document.createElement('canvas');
      const context = canvas.getContext('2d');
-     const size = 128; // Higher resolution for better text
+     const size = 128;
      const halfSize = size / 2;
      canvas.width = size;
      canvas.height = size;
 
-     context.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Darker background
+     context.fillStyle = 'rgba(0, 0, 0, 0.7)';
      context.beginPath();
-     context.roundRect(0, 0, size, size, size * 0.15); // Less rounded rectangle
+     context.roundRect(0, 0, size, size, size * 0.15);
      context.fill();
 
-     context.font = `Bold ${size * 0.6}px Arial`; // Bolder, slightly larger font
+     context.font = `Bold ${size * 0.6}px Arial`;
      context.fillStyle = 'white';
      context.textAlign = 'center';
      context.textBaseline = 'middle';
-     context.fillText(level.toString(), halfSize, halfSize + size * 0.02); // Vertically center text
+     context.fillText(level.toString(), halfSize, halfSize + size * 0.02);
 
      const texture = new THREE.CanvasTexture(canvas);
      texture.needsUpdate = true;
-     texture.colorSpace = THREE.SRGBColorSpace; // Important for correct color display
+     texture.colorSpace = THREE.SRGBColorSpace;
 
-     const spriteMaterial = new THREE.SpriteMaterial({ map: texture, sizeAttenuation: false, depthTest: false }); // Disable depth test so it's always visible
+     const spriteMaterial = new THREE.SpriteMaterial({ map: texture, sizeAttenuation: false, depthTest: false });
      const sprite = new THREE.Sprite(spriteMaterial);
-     sprite.scale.set(0.1, 0.1, 1); // Adjust scale in 3D space
+     sprite.scale.set(0.1, 0.1, 1);
      return sprite;
 }
 
 function updateWeaponLevelVisuals() {
-    // Dispose old sprites before creating new ones
      if (playerMesh) {
         disposeSprite(playerLevelIndicator);
         playerLevelIndicator = createLevelTextMesh(playerWeaponLevel);
         const playerUnitHeight = CELL_3D_SIZE * 0.9;
         playerLevelIndicator.position.set(0, playerUnitHeight * 0.6, 0);
         playerMesh.add(playerLevelIndicator);
-
-        // Update emissive intensity based on level
-        playerMesh.material.emissiveIntensity = 0.5 + (playerWeaponLevel - 1) * 0.3; // Increase glow with level
+        playerMesh.material.emissiveIntensity = 0.5 + (playerWeaponLevel - 1) * 0.3;
     }
      if (aiMesh) {
         disposeSprite(aiLevelIndicator);
@@ -649,19 +616,17 @@ function updateWeaponLevelVisuals() {
         const aiUnitHeight = CELL_3D_SIZE * 1.0;
         aiLevelIndicator.position.set(0, aiUnitHeight * 0.6, 0);
         aiMesh.add(aiLevelIndicator);
-
-        // Update emissive intensity based on level
-        aiMesh.material.emissiveIntensity = 0.5 + (aiWeaponLevel - 1) * 0.3; // Increase glow with level
+        aiMesh.material.emissiveIntensity = 0.5 + (aiWeaponLevel - 1) * 0.3;
     }
 }
 
 function createPowerup3D(x, y) {
-    const powerupSize = CELL_3D_SIZE * 0.3; // Slightly larger
-    const powerupGeom = new THREE.IcosahedronGeometry(powerupSize, 0); // Use Icosahedron for smoother look
-    const mesh = new THREE.Mesh(powerupGeom, powerupMaterial); // Use shared material instance
-    mesh.position.copy(get3DPosition(x, y, powerupSize * 0.7)); // Position slightly floating above floor
+    const powerupSize = CELL_3D_SIZE * 0.3;
+    const powerupGeom = new THREE.IcosahedronGeometry(powerupSize, 0);
+    const mesh = new THREE.Mesh(powerupGeom, powerupMaterial);
+    mesh.position.copy(get3DPosition(x, y, powerupSize * 0.7));
     mesh.castShadow = true;
-    mesh.userData = { type: 'powerup', gridX: x, gridY: y, spinSpeed: Math.random() * 0.03 + 0.015 }; // Faster spin
+    mesh.userData = { type: 'powerup', gridX: x, gridY: y, spinSpeed: Math.random() * 0.03 + 0.015 };
     gameBoardGroup.add(mesh);
     return { mesh: mesh, pos: { x, y } };
 }
@@ -679,17 +644,10 @@ function removePowerup3D(x, y) {
 // --- Highlighting Functions ---
 function clearHighlights() {
     activeHighlights.forEach(mesh => {
-        // Restore original material properties or use a base floor highlight
-        // Cloning materials can cause performance issues if not managed.
-        // A better way might be to have a separate highlight mesh layer,
-        // but for simplicity, we swap materials back here.
-        // Let's reset them to the base floor material to avoid leaks/many materials.
-        if (mesh.material !== floorMaterial) {
-             disposeMesh(mesh); // Dispose the highlight instance
-        }
+         disposeMesh(mesh); // Dispose the highlight instance
     });
     activeHighlights = [];
-    // Recreate floor meshes for highlighted cells
+    // Recreate floor meshes if they were replaced by highlights
      for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
             if (grid[y][x] === 'floor' && !floorMeshes[y][x]) {
@@ -708,38 +666,33 @@ function clearHighlights() {
 }
 
 function highlightCell(x, y, highlightMaterial) {
-    if (isValid(x, y) && grid[y][x] === 'floor') { // Only highlight floor tiles
+    if (isValid(x, y) && grid[y][x] === 'floor') {
         const existingMesh = floorMeshes[y]?.[x];
          if (existingMesh) {
-             disposeMesh(existingMesh); // Remove the base floor mesh
-             floorMeshes[y][x] = null; // Clear reference
+             disposeMesh(existingMesh);
+             floorMeshes[y][x] = null;
          }
 
-         // Create a new highlight mesh instance
-        const highlightGeom = new THREE.BoxGeometry(CELL_3D_SIZE, 0.25, CELL_3D_SIZE); // Slightly taller highlight
-        const highlightMesh = new THREE.Mesh(highlightGeom, highlightMaterial.clone()); // Clone material for each highlight
+        const highlightGeom = new THREE.BoxGeometry(CELL_3D_SIZE, 0.25, CELL_3D_SIZE);
+        const highlightMesh = new THREE.Mesh(highlightGeom, highlightMaterial.clone());
         highlightMesh.position.copy(get3DPosition(x, y));
-        highlightMesh.position.y = -0.08; // Position slightly above base floor level
-        highlightMesh.userData = { gridX: x, gridY: y, type: 'highlight' }; // Mark as highlight
+        highlightMesh.position.y = -0.08;
+        highlightMesh.userData = { gridX: x, gridY: y, type: 'highlight' };
         gameBoardGroup.add(highlightMesh);
-        activeHighlights.push(highlightMesh); // Add to list for clearing
+        activeHighlights.push(highlightMesh);
     }
 }
 
 function renderHighlights() {
-    // Only clear and re-render highlights if needed (during planning)
-    if (gamePhase !== 'planning' || gameOverState || isResolving) {
+    // Only render highlights during the player's turn when not resolving
+    if (currentPlayer !== 'player' || isResolving || gameOverState) {
         if (activeHighlights.length > 0) clearHighlights();
         return;
     }
 
-    // Check if highlights need updating (e.g., mouse moved, mode changed)
-    // For simplicity here, we clear and re-render every frame in planning phase.
-    // A more optimized approach would track state changes.
-     if (activeHighlights.length > 0) clearHighlights();
+     clearHighlights(); // Clear previous highlights before rendering new ones
 
-
-    const opponentTargetPos = aiPos; // Target for player is always AI
+    const opponentTargetPos = aiPos; // Target for player is AI
 
     if (currentPlanningMode === 'move') {
         const validMoves = getValidMoves(playerPos, aiPos);
@@ -749,35 +702,29 @@ function renderHighlights() {
          let pathToShow = [];
          let useMaterial = pathHighlightMaterial;
 
-         // Show hover path if available and user is still picking points
+         // Show hover path if player is picking points
          if (partialShootPlan?.needsInput && hoverPath.length > 0) {
              pathToShow = hoverPath;
               if (!hoverPathIsValid) {
                  useMaterial = invalidPathHighlightMaterial;
               }
          }
-         // Show the planned path if action is locked (shouldn't happen in planning phase, but for clarity)
-         else if (playerPlannedAction?.type === 'shoot') {
-             pathToShow = playerPlannedAction.path;
-             useMaterial = pathHighlightMaterial;
-         }
-         // Show the current partial plan if user is picking bends
+         // Show the current partial plan if bends are locked in
           else if (partialShootPlan?.path?.length > 0 && !partialShootPlan.needsInput) {
              pathToShow = partialShootPlan.path;
              useMaterial = pathHighlightMaterial;
          }
 
-
          let hitOpponent = false;
          pathToShow.forEach(p => {
              highlightCell(p.x, p.y, useMaterial);
+             // Check if the opponent's CURRENT position is on the valid path being shown
              if (p.x === opponentTargetPos.x && p.y === opponentTargetPos.y && useMaterial !== invalidPathHighlightMaterial) {
                  hitOpponent = true;
              }
          });
 
-        // Highlight target cell if hit, even if it's not part of the path visually
-        // This might overlap with path highlight, but that's okay.
+        // Highlight target if hit
         if (hitOpponent) {
              highlightCell(opponentTargetPos.x, opponentTargetPos.y, hitHighlightMaterial);
         }
@@ -789,10 +736,9 @@ function renderHighlights() {
 function createLaserBeam(path, material) {
     if (!path || path.length < 1) return null;
 
-     // Adjust path for visual effect: start slightly above unit, end slightly above target
      const adjustedPath = [];
-     const startOffset = playerMesh.position.y; // Start at player height
-     const endOffset = aiMesh.position.y; // End at AI height
+     const startOffset = (material === playerLaserMaterial ? playerMesh : aiMesh).position.y;
+     const endOffset = (material === playerLaserMaterial ? aiMesh : playerMesh).position.y;
 
      // Start point
      const firstPoint3D = get3DPosition(path[0].x, path[0].y, startOffset);
@@ -803,43 +749,36 @@ function createLaserBeam(path, material) {
          adjustedPath.push(get3DPosition(path[i].x, path[i].y, startOffset));
      }
 
-     // End point (extend slightly past the last path cell towards the target)
+     // End point extension logic (adjusted for potentially different unit heights)
      if (path.length > 0) {
           const lastPoint = path[path.length - 1];
-          const targetUnitPos = (material === playerLaserMaterial) ? aiPos : playerPos; // Who is being shot at
+          const targetUnitPos = (material === playerLaserMaterial) ? aiPos : playerPos;
+          const targetUnit3D = get3DPosition(targetUnitPos.x, targetUnitPos.y, endOffset); // Use target unit's height
+
+          // Check if the last cell of the *logical* path is the target unit's cell
           if (lastPoint.x === targetUnitPos.x && lastPoint.y === targetUnitPos.y) {
-              // If the path ends on the target, extend slightly to the unit center
-              const lastPoint3D = get3DPosition(lastPoint.x, lastPoint.y, startOffset); // Use startOffset for consistency before tween
-              adjustedPath[adjustedPath.length-1] = lastPoint3D; // Replace last point with one at unit height
-
-              const targetUnit3D = get3DPosition(targetUnitPos.x, targetUnitPos.y, endOffset);
-
-              // Add a point slightly past the last grid cell towards the target unit center
-              const dirToTarget = targetUnit3D.clone().sub(lastPoint3D).normalize().multiplyScalar(CELL_3D_SIZE * 0.3); // Extend by ~30% of cell size
-              adjustedPath.push(lastPoint3D.clone().add(dirToTarget));
+              const lastPathPoint3D = adjustedPath[adjustedPath.length - 1]; // Last point in the 3D path array
+              // Extend slightly towards the target unit's center (at its height)
+              const dirToTarget = targetUnit3D.clone().sub(lastPathPoint3D).normalize().multiplyScalar(CELL_3D_SIZE * 0.3);
+              adjustedPath.push(lastPathPoint3D.clone().add(dirToTarget));
           }
      }
 
-
-    // Use CatmullRomCurve3 for smooth path visualization, even if path is straight line segments
     const curve = new THREE.CatmullRomCurve3(adjustedPath, false, 'catmullrom', 0.1);
-    const tubeRadius = CELL_3D_SIZE * 0.08; // Thicker laser
-    const tubeSegments = Math.max(8, path.length * 4); // More segments for smoother curve
+    const tubeRadius = CELL_3D_SIZE * 0.08;
+    const tubeSegments = Math.max(8, path.length * 4);
     const tubeGeom = new THREE.TubeGeometry(curve, tubeSegments, tubeRadius, 8, false);
 
-     // Use AdditiveBlending material
-    const laserMesh = new THREE.Mesh(tubeGeom, material.clone()); // Clone material for opacity tween
+    const laserMesh = new THREE.Mesh(tubeGeom, material.clone()); // Use cloned material
     laserMesh.userData = { type: 'laser' };
-    // Lasers usually don't cast shadows
     laserMesh.castShadow = false;
     laserMesh.receiveShadow = false;
 
     scene.add(laserMesh);
     activeLasers.push(laserMesh);
 
-    // Animate opacity for fading out
     new TWEEN.Tween({ opacity: laserMesh.material.opacity })
-        .to({ opacity: 0 }, SHOT_FLASH_DURATION) // Fade out over full duration
+        .to({ opacity: 0 }, SHOT_FLASH_DURATION)
         .easing(TWEEN.Easing.Quadratic.In)
         .onUpdate((obj) => {
             if(laserMesh.material) laserMesh.material.opacity = obj.opacity;
@@ -850,13 +789,6 @@ function createLaserBeam(path, material) {
             if (index > -1) activeLasers.splice(index, 1);
         })
         .start();
-
-     // Optional: Animate scale or color?
-    // const scaleTween = new TWEEN.Tween(laserMesh.scale)
-    //     .from({ x: 0.1, y: 0.1, z: 0.1 })
-    //     .to({ x: 1, y: 1, z: 1 }, SHOT_FLASH_DURATION * 0.3)
-    //     .easing(TWEEN.Easing.Back.Out)
-    //     .start();
 
     return laserMesh;
 }
@@ -871,92 +803,89 @@ function animate(time) {
     // Animate powerup rotation
     powerupMeshes.forEach(p => {
         p.mesh.rotation.y += p.mesh.userData.spinSpeed || 0.015;
-        p.mesh.rotation.x += (p.mesh.userData.spinSpeed || 0.015) * 0.5; // Slower tilt
+        p.mesh.rotation.x += (p.mesh.userData.spinSpeed || 0.015) * 0.5;
     });
 
-    // Update highlights in the animate loop if needed (e.g., based on hover)
-    // renderHighlights is called by mousemove/click and setPlanningMode,
-    // but calling it here ensures they are updated even if camera moves or during animations.
-    // However, clearing and recreating meshes every frame is expensive.
-    // Let's only call it when input/state changes.
-    // If we want highlights to animate or react to camera (like pulsating),
-    // we'd need a different approach than material swapping/mesh recreation.
-    // For now, rely on input/state changes to trigger renderHighlights.
-
-    // Render the scene using the composer
+    // No need to call renderHighlights here - it's triggered by mousemove/mode changes
     composer.render();
 }
 
 // --- Input Handling Functions ---
 function handleCanvasMouseMove(event) {
-    updateMouseCoords(event);
-    // Only update hover path if planning shoot mode, not resolving, not game over, and needs input
-    if (gamePhase !== 'planning' || currentPlanningMode !== 'shoot' || playerPlannedAction || gameOverState || isResolving || !partialShootPlan?.needsInput) {
-        if (hoverPath.length > 0 || !hoverPathIsValid) { // Clear old hover state if conditions are not met
-             hoverPos = null;
-             hoverPath = [];
-             hoverPathIsValid = false;
-             renderHighlights(); // Clear highlights immediately
+    // Only allow hover interactions during player's turn and when not resolving
+    if (currentPlayer !== 'player' || isResolving || gameOverState) {
+        if (hoverPath.length > 0 || !hoverPathIsValid) { // Clear old hover state if conditions not met
+            hoverPos = null;
+            hoverPath = [];
+            hoverPathIsValid = false;
+            renderHighlights(); // Clear highlights immediately
         }
         return;
     }
+    // Only update hover path if planning shoot mode and needs input
+    if (currentPlanningMode !== 'shoot' || !partialShootPlan?.needsInput) {
+         if (hoverPath.length > 0 || !hoverPathIsValid) { // Clear old hover state if conditions not met
+            hoverPos = null;
+            hoverPath = [];
+            hoverPathIsValid = false;
+            renderHighlights(); // Clear highlights immediately
+         }
+        return;
+    }
 
+    updateMouseCoords(event);
     raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObject(intersectionPlane); // Raycast against the invisible plane
+    const intersects = raycaster.intersectObject(intersectionPlane);
     if (intersects.length > 0) {
         const targetGridPos = getGridCoords(intersects[0].point);
-        // Check if the intersection point is actually within the grid boundaries
         if (isValid(targetGridPos.x, targetGridPos.y)) {
-            // Only update if the hover position has changed
             if (!hoverPos || hoverPos.x !== targetGridPos.x || hoverPos.y !== targetGridPos.y) {
                 hoverPos = { ...targetGridPos };
                 const startPos = partialShootPlan.lastBendPos;
-                // Calculate the segment from the last bend point to the hover cell
-                const segmentResult = calculateShotPathSegment(startPos, hoverPos, aiPos);
+                const segmentResult = calculateShotPathSegment(startPos, hoverPos, aiPos); // Check against AI pos for potential hit display
 
                 if (segmentResult.isValidSegment) {
-                    // Append the new valid segment to the existing partial path
                     hoverPath = [...partialShootPlan.path, ...segmentResult.path];
                     hoverPathIsValid = true;
                 } else {
-                    // If segment is invalid, show the path up to the blocked point if any,
-                    // or just the partial plan path plus the invalid hover pos.
-                    // For visual clarity, let's show the partial plan + the hover pos (which will be marked invalid).
-                    hoverPath = [...partialShootPlan.path, hoverPos];
+                    hoverPath = [...partialShootPlan.path, hoverPos]; // Show path up to hover, marked invalid
                     hoverPathIsValid = false;
                 }
-                renderHighlights(); // Re-render highlights based on the new hover path
+                renderHighlights();
             }
         } else {
-             // Mouse is over the plane but outside the valid grid area
-             if (hoverPos !== null) { // Only clear if it was previously over a valid area
+             if (hoverPos !== null) {
                  hoverPos = null;
                  hoverPath = [];
                  hoverPathIsValid = false;
-                 renderHighlights(); // Clear highlights
+                 renderHighlights();
              }
         }
     } else {
-        // Mouse is not over the intersection plane
-        if (hoverPos !== null) { // Only clear if it was previously over a valid area
+        if (hoverPos !== null) {
              hoverPos = null;
              hoverPath = [];
              hoverPathIsValid = false;
-             renderHighlights(); // Clear highlights
+             renderHighlights();
         }
     }
 }
 
 function handleCanvasClick(event) {
-     if (gamePhase !== 'planning' || playerPlannedAction || gameOverState || isResolving) return;
+     // Only allow clicks during player's turn and when not resolving
+     if (currentPlayer !== 'player' || isResolving || gameOverState) return;
+
      updateMouseCoords(event);
      raycaster.setFromCamera(mouse, camera);
-     const intersects = raycaster.intersectObject(intersectionPlane); // Raycast against the invisible plane
+     const intersects = raycaster.intersectObject(intersectionPlane);
     if (intersects.length > 0) {
         const { x, y } = getGridCoords(intersects[0].point);
-         if (isValid(x,y) && grid[y][x] === 'floor') { // Ensure clicked cell is a floor tile
-             if (currentPlanningMode === 'move') handleMoveInput(x, y);
-             else if (currentPlanningMode === 'shoot') handleShootInput(x, y);
+         if (isValid(x,y) && grid[y][x] === 'floor') { // Must click a floor tile
+             if (currentPlanningMode === 'move') {
+                 handleMoveInput(x, y);
+             } else if (currentPlanningMode === 'shoot') {
+                 handleShootInput(x, y);
+             }
          } else {
               setMessage("Invalid click: Must click on a floor tile.");
          }
@@ -976,20 +905,21 @@ function setMessage(msg) { messageArea.textContent = msg; }
 function updatePhaseIndicator() {
     let phaseText = 'Unknown';
     if (gameOverState) { phaseText = `Game Over! ${gameOverState.message}`; }
-    else { phaseText = `Phase: ${gamePhase.charAt(0).toUpperCase() + gamePhase.slice(1)}`; }
+    else if (isResolving) { phaseText = `Executing ${currentPlayer}'s Action...`; }
+    else if (currentPlayer === 'player') { phaseText = "Your Turn"; }
+    else if (currentPlayer === 'ai') { phaseText = "AI Turn"; }
     phaseIndicator.textContent = phaseText;
 }
 function updateWeaponLevelInfo() {
      weaponLevelInfo.textContent = `Your Weapon Level: ${playerWeaponLevel}`;
      aiWeaponLevelInfo.textContent = `AI Weapon Level: ${aiWeaponLevel}`;
-     updateWeaponLevelVisuals(); // Update the 3D visuals of the units
+     updateWeaponLevelVisuals();
 }
 function enablePlanningControls() {
-    if (gameOverState) return;
+    if (gameOverState || isResolving || currentPlayer !== 'player') return;
     btnPlanMove.disabled = false;
     btnPlanShoot.disabled = false;
-    isResolving = false;
-    // Highlights will be rendered on next mouse move or explicit call
+    renderHighlights(); // Show highlights relevant to the current mode
 }
 function disablePlanningControls() {
     btnPlanMove.disabled = true;
@@ -997,142 +927,112 @@ function disablePlanningControls() {
     hoverPos = null;
     hoverPath = [];
     hoverPathIsValid = false;
-    partialShootPlan = null; // Clear any partial plan
-    clearHighlights(); // Immediately clear highlights when disabling controls
-    // No longer calling renderHighlights in animate loop when disabled
+    partialShootPlan = null;
+    clearHighlights();
 }
 
-// --- Planning Phase Logic Functions ---
+// --- Planning Phase Logic Functions (Player Only) ---
 function setPlanningMode(mode) {
-    if (gamePhase !== 'planning' || gameOverState || isResolving) return;
+    if (currentPlayer !== 'player' || isResolving || gameOverState) return;
     console.log("Setting planning mode:", mode);
     currentPlanningMode = mode;
-    playerPlannedAction = null; // Reset planned action when changing mode
-    partialShootPlan = null; // Reset partial plan
+    partialShootPlan = null;
     hoverPos = null;
-    hoverPath = []; // Clear hover path
+    hoverPath = [];
     hoverPathIsValid = false;
 
     btnPlanMove.classList.toggle('active', mode === 'move');
     btnPlanShoot.classList.toggle('active', mode === 'shoot');
 
     if (mode === 'move') {
-         setMessage("Click an adjacent floor cell to plan your move.");
+         setMessage("Your Turn: Click an adjacent floor cell to move.");
     } else if (mode === 'shoot') {
           partialShootPlan = {
              needsInput: true, maxBends: playerWeaponLevel - 1, segments: [], path: [], lastBendPos: playerPos
          };
-         setMessage(`Weapon Level ${playerWeaponLevel} Shot: Click target cell for segment 1 (Max Bends: ${partialShootPlan.maxBends}).`);
+         setMessage(`Your Turn (Shoot Lv ${playerWeaponLevel}): Click target cell for segment 1 (Max Bends: ${partialShootPlan.maxBends}).`);
     }
     renderHighlights(); // Render highlights for the new mode
 }
 
 function handleMoveInput(targetX, targetY) {
-     if (currentPlanningMode !== 'move' || playerPlannedAction || gameOverState || isResolving) return;
+     if (currentPlayer !== 'player' || currentPlanningMode !== 'move' || isResolving || gameOverState) return;
 
-    const validMoves = getValidMoves(playerPos, aiPos);
-    const isValidMove = validMoves.some(move => move.x === targetX && move.y === targetY);
+    const validMoves = getValidMoves(playerPos, aiPos); // Check against AI's *current* position
+    const isValidTarget = validMoves.some(move => move.x === targetX && move.y === targetY);
 
-    if (isValidMove) {
-        playerPlannedAction = { type: 'move', target: { x: targetX, y: targetY } };
-        setMessage(`Move planned to ${targetX},${targetY}. Waiting for AI...`);
-        lockPlayerAction();
+    if (isValidTarget) {
+        const action = { type: 'move', target: { x: targetX, y: targetY } };
+        executeAction(action); // Execute the move immediately
     } else {
-        setMessage("Invalid move target. Click a highlighted square.");
+        setMessage("Invalid move target. Click a highlighted adjacent square.");
     }
 }
 
-// --- Input Handling Functions ---
-// (MODIFIED handleShootInput for clarity and ensure segment targeting)
 function handleShootInput(clickX, clickY) {
-    if (currentPlanningMode !== 'shoot' || !partialShootPlan || !partialShootPlan.needsInput || playerPlannedAction || gameOverState || isResolving) {
+    if (currentPlayer !== 'player' || currentPlanningMode !== 'shoot' || !partialShootPlan || !partialShootPlan.needsInput || isResolving || gameOverState) {
         console.warn("Ignoring shoot input - not in correct state.");
         return;
     }
 
-    const targetPos = { x: clickX, y: clickY }; // The clicked cell is the target for THIS segment
-    const startPos = partialShootPlan.lastBendPos; // Start from the player or the last bend point
+    const targetPos = { x: clickX, y: clickY };
+    const startPos = partialShootPlan.lastBendPos;
 
-    // Prevent targeting the start cell itself
     if (targetPos.x === startPos.x && targetPos.y === startPos.y) {
         setMessage("Cannot target the starting cell for a segment.");
         return;
     }
 
-    // Check if the segment from startPos to targetPos is valid (doesn't hit walls before targetPos)
-    // The opponentPos is needed by calculateShotPathSegment to check for hits along the way, but validity depends on reaching targetPos.
-    const segmentResult = calculateShotPathSegment(startPos, targetPos, aiPos);
+    // Check segment validity (only walls matter here, opponent position checked at resolution)
+    const segmentResult = calculateShotPathSegment(startPos, targetPos, aiPos); // Pass AI pos for hover hit check
 
     if (!segmentResult.isValidSegment) {
-        // The path *to the clicked cell* is blocked by a wall.
         setMessage("Invalid target: Path segment is blocked by a wall.");
-        hoverPath = []; // Clear hover state on invalid click
+        hoverPath = [];
         hoverPathIsValid = false;
-        renderHighlights(); // Update highlights to remove invalid hover path
+        renderHighlights();
         return;
     }
 
     // --- Valid segment selected ---
-    // Add the *exact path* calculated for this segment to the partial plan
     partialShootPlan.segments.push({ path: segmentResult.path, endPos: targetPos });
-    // The full path is rebuilt from segments, ensure no duplicates if targetPos included in path
-    // Rebuild the full path from all segment paths collected so far
     partialShootPlan.path = partialShootPlan.segments.flatMap(seg => seg.path);
-
-    // Update the last bend position to the *clicked* target cell
     partialShootPlan.lastBendPos = targetPos;
 
-    const bendsMade = partialShootPlan.segments.length - 1; // Bends are the intermediate points
+    const bendsMade = partialShootPlan.segments.length - 1;
 
     if (bendsMade < partialShootPlan.maxBends) {
         // Plan another segment/bend
         partialShootPlan.needsInput = true;
-        setMessage(`Level ${playerWeaponLevel} Shot: Bend ${bendsMade + 1} at ${targetPos.x},${targetPos.y}. Click target cell for segment ${bendsMade + 2}.`);
-        hoverPos = null; // Clear hover state
+        setMessage(`Shoot Plan: Bend ${bendsMade + 1} at ${targetPos.x},${targetPos.y}. Click target cell for segment ${bendsMade + 2}.`);
+        hoverPos = null;
         hoverPath = [];
         hoverPathIsValid = false;
         renderHighlights(); // Update highlights to show current planned path
     } else {
         // Max bends reached, finalize the shot plan
         partialShootPlan.needsInput = false;
-        const finalPlan = {
+        const finalAction = {
             type: 'shoot',
-            targetPoints: partialShootPlan.segments.map(seg => seg.endPos), // End points of segments are the bend points + final target
-            path: partialShootPlan.path, // The full path taken by the shot
+            targetPoints: partialShootPlan.segments.map(seg => seg.endPos),
+            // Path stored in partialShootPlan.path is tentative, recalculate at execution
         };
-
-        playerPlannedAction = finalPlan;
-        setMessage("Shoot planned. Waiting for AI...");
-        lockPlayerAction();
+        executeAction(finalAction); // Execute the shot immediately
     }
 }
 
-function lockPlayerAction() {
-    disablePlanningControls(); // Disable controls and clear highlights
-    partialShootPlan = null; // Ensure partial plan is cleared
-    hoverPos = null;
-    hoverPath = [];
-    hoverPathIsValid = false;
-
-    // Short delay before AI plans and resolution starts
-    setTimeout(() => {
-        planAiAction(); // AI plans its action
-        startResolution(); // Start the resolution phase
-    }, 300);
-}
 
 // --- Shot Path Calculation Functions ---
-// (Keep calculateShotPathSegment and calculateFullPathFromTargets as is)
-function calculateShotPathSegment(startPos, targetPos, opponentPos) {
+// calculateShotPathSegment: Calculates a single straight line path segment
+function calculateShotPathSegment(startPos, targetPos, opponentPos) { // opponentPos used only for hit check *during hover*
     let path = [];
     let currentPos = { ...startPos };
     let isValidSegment = true;
-    let hitTargetAlongSegment = false; // Renamed for clarity
+    let hitTargetAlongSegment = false;
 
     const dxTotal = targetPos.x - startPos.x;
     const dyTotal = targetPos.y - startPos.y;
 
-    // Determine primary direction (must be purely horizontal or vertical)
     let stepDir = { dx: 0, dy: 0 };
     if (Math.abs(dxTotal) > Math.abs(dyTotal)) {
         if (dyTotal !== 0) return { path: [], isValidSegment: false, hitTarget: false }; // Must be horizontal
@@ -1141,83 +1041,76 @@ function calculateShotPathSegment(startPos, targetPos, opponentPos) {
          if (dxTotal !== 0) return { path: [], isValidSegment: false, hitTarget: false }; // Must be vertical
         stepDir.dy = Math.sign(dyTotal);
     } else {
-        return { path: [], isValidSegment: false, hitTarget: false }; // start === target or no movement
+        return { path: [], isValidSegment: false, hitTarget: false }; // start === target
     }
 
-    // Traverse step by step *up to the target cell*
     while (currentPos.x !== targetPos.x || currentPos.y !== targetPos.y) {
         const nextX = currentPos.x + stepDir.dx;
         const nextY = currentPos.y + stepDir.dy;
 
         if (!isValid(nextX, nextY) || isWall(nextX, nextY)) {
             isValidSegment = false; // Hit wall or went off grid before reaching targetPos
-            // path.push({ x: nextX, y: nextY }); // Optionally add the wall cell
-            break; // Stop traversal for this segment
+            break;
         }
 
         currentPos = { x: nextX, y: nextY };
-        path.push({ ...currentPos }); // Add the valid step to the path
+        path.push({ ...currentPos }); // Add the valid step
 
-        // Check if opponent is hit *at this cell* but DO NOT stop
+        // Check if opponent is hit *at this cell*
         if (currentPos.x === opponentPos.x && currentPos.y === opponentPos.y) {
-            hitTargetAlongSegment = true; // Mark that the opponent was on this segment path
-            // --- DO NOT BREAK HERE --- allow shot to continue to targetPos
+            hitTargetAlongSegment = true; // Mark opponent was on path
         }
 
-        // If we reached the target cell (should be redundant due to while loop condition, but safe check)
         if (currentPos.x === targetPos.x && currentPos.y === targetPos.y) {
              break;
         }
     }
 
-    // A segment is valid if it reaches the target cell AND didn't hit a wall/go off-grid before the target.
-    // The check `currentPos.x === targetPos.x && currentPos.y === targetPos.y` ensures it reached the target.
-    // The `isValidSegment = false` flag handles hitting walls.
     const reachedTargetCell = isValidSegment && (currentPos.x === targetPos.x && currentPos.y === targetPos.y);
-
-    // Note: The `hitTarget` returned here now means "was the opponent on any part of this specific segment's valid path?"
     return { path: path, isValidSegment: reachedTargetCell, hitTarget: hitTargetAlongSegment };
 }
 
-
-function calculateFullPathFromTargets(startPos, targetPoints, opponentPos) {
+// calculateFullPathFromTargets: Calculates the full multi-segment path
+// opponentActualPos is the position to check for hits *at the time of execution*
+function calculateFullPathFromTargets(startPos, targetPoints, opponentActualPos) {
     let fullPath = [];
     let currentPos = { ...startPos };
     let pathIsValid = true;
-    let finalHitTarget = false; // Was the opponent hit *anywhere* on the *entire valid* path?
+    let finalHitTarget = false;
 
     for (const targetPoint of targetPoints) {
-        // Calculate segment from the *previous* target point (or start) to the *current* target point
-        const segmentResult = calculateShotPathSegment(currentPos, targetPoint, opponentPos);
+        // Pass opponentActualPos for hit check during calculation
+        const segmentResult = calculateShotPathSegment(currentPos, targetPoint, opponentActualPos);
 
-        // Append the calculated path for this segment, even if it's invalid (for potential visual feedback if needed)
-        // However, only add to the *logical* fullPath if the segment was valid.
-        // Let's refine: The fullPath should only contain the valid path steps.
-        if (segmentResult.isValidSegment) {
-            fullPath.push(...segmentResult.path);
-        }
-
-
-        // The entire path becomes invalid if *any* segment fails to reach its target point without hitting a wall.
         if (!segmentResult.isValidSegment) {
             pathIsValid = false;
-            // If a segment is invalid, we might still want the path up to the point of failure for visualization.
-            // The current logic correctly stops appending valid path segments.
-            break; // The overall path is broken, stop processing further segments
+            // Optionally store partial path up to failure point if needed
+            // fullPath.push(...segmentResult.path); // Add the failed segment's path
+            break; // Overall path is broken
         }
 
-        // Segment is valid. Update the starting point for the next segment.
-        currentPos = targetPoint;
+        // Segment is valid
+        fullPath.push(...segmentResult.path);
+        currentPos = targetPoint; // Update start for next segment
 
-        // Check if the opponent was hit by this *valid* segment
+        // Check if opponent was hit *anywhere* on this valid segment
         if (segmentResult.hitTarget) {
-             finalHitTarget = true; // Mark that the opponent was hit somewhere along the valid path
-             // Don't break, continue calculating the full path for visualization
+             finalHitTarget = true; // Mark hit, but continue calculating full path
         }
     }
 
-    // The path is valid only if *all* segments were valid (reached their target points).
-    // The hitTarget flag is true if the opponent was on any cell in the valid path segments.
+    // Final check: Ensure the opponent wasn't *only* hit on a segment that ultimately failed
+    // The loop breaks on invalid segments, so finalHitTarget is only true if hit on a valid part.
+    // However, the hit check within calculateShotPathSegment needs to be accurate against opponentActualPos.
+
+    // Let's refine the hit check: iterate the FINAL valid fullPath
+    if (pathIsValid) {
+        finalHitTarget = fullPath.some(p => p.x === opponentActualPos.x && p.y === opponentActualPos.y);
+    } else {
+        finalHitTarget = false; // Invalid path cannot hit
+    }
+
+
     return { path: fullPath, isValid: pathIsValid, hitTarget: finalHitTarget };
 }
 
@@ -1227,7 +1120,7 @@ function planAiAction() {
     console.log("AI Planning...");
     const possibleActions = [];
     const currentAiPos = { ...aiPos };
-    const currentPlayerPos = { ...playerPos };
+    const currentPlayerPos = { ...playerPos }; // Player's current, fixed position
     const currentAiLevel = aiWeaponLevel;
     const maxBendsToPlan = Math.min(currentAiLevel - 1, AI_MAX_BEND_CHECK_DEPTH);
 
@@ -1239,13 +1132,11 @@ function planAiAction() {
         possibleActions.push({ type: 'move', target: move });
     });
 
-    // 3. Possible Shots (Recursive generation, limited depth)
+    // 3. Possible Shots (Recursive generation)
     function generateShotActions(startPos, currentTargetPathPoints, bendsSoFar) {
-        // Base Case: Max bends reached or exceeded planned depth
         if (bendsSoFar > maxBendsToPlan) return;
 
         const directions = [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }];
-        // If we just bent, exclude the reverse direction for the next segment
         let forbiddenDir = { dx: 0, dy: 0 };
         if (currentTargetPathPoints.length > 0) {
             const lastBend = currentTargetPathPoints[currentTargetPathPoints.length - 1];
@@ -1253,15 +1144,11 @@ function planAiAction() {
             forbiddenDir = { dx: Math.sign(prevPos.x - lastBend.x), dy: Math.sign(prevPos.y - lastBend.y) };
         }
 
-
         directions.forEach(dir => {
-             // Prevent immediate 180-degree turn for the *next* segment
             if (dir.dx === forbiddenDir.dx && dir.dy === forbiddenDir.dy && (dir.dx !== 0 || dir.dy !== 0)) {
                  return; // Skip reverse direction
              }
 
-             let currentExplorePos = { ...startPos };
-             // Explore cells along the current direction up to GRID_SIZE away, or a performance limit
              for (let i = 1; i <= Math.max(GRID_SIZE, AI_MAX_SEGMENT_EVAL_POINTS); i++) {
                  const potentialTargetX = startPos.x + dir.dx * i;
                  const potentialTargetY = startPos.y + dir.dy * i;
@@ -1269,111 +1156,85 @@ function planAiAction() {
 
                  if (!isValid(potentialTargetX, potentialTargetY)) break; // Off grid
 
-                 // Check segment validity from startPos to potentialTarget
-                 const segmentResult = calculateShotPathSegment(startPos, potentialTarget, currentPlayerPos);
+                 // Check segment validity from startPos to potentialTarget (only walls matter)
+                 const segmentResult = calculateShotPathSegment(startPos, potentialTarget, currentPlayerPos); // Pass player pos for potential hit evaluation
 
                  if (!segmentResult.isValidSegment) {
-                     break; // Path blocked by wall, stop checking further along this direction
+                     break; // Path blocked by wall
                  }
 
-                 // --- Valid Segment found to potentialTarget ---
+                 // Valid Segment found
                  const newTargetPathPoints = [...currentTargetPathPoints, potentialTarget];
 
-                 // Calculate the full path for this potential action
-                 // Note: This is calculated from the *original AI pos* through all targetPoints
+                 // Calculate the full path for this *potential* action
                  const fullPathResult = calculateFullPathFromTargets(currentAiPos, newTargetPathPoints, currentPlayerPos);
 
-                 // Add the shot action if the full path is valid (up to the final target point)
                  if(fullPathResult.isValid) {
                      possibleActions.push({
                          type: 'shoot',
-                         targetPoints: newTargetPathPoints, // Store the intermediate bend points + final target
-                         path: fullPathResult.path, // Store the actual cell path
-                         // Add other relevant info like hit status if needed for evaluation
+                         targetPoints: newTargetPathPoints,
+                         // Store calculated hit status for evaluation
                          hitsPlayer: fullPathResult.hitTarget
                      });
                  }
 
-                 // If the segment hit the player, AI might not want to bend further past them
-                 // depending on strategy, but for general path generation, we continue.
-
-                 // --- Recursive Call for Next Bend (if within limits) ---
-                 if (bendsSoFar + 1 < currentAiLevel) { // Can we make another bend based on AI level?
-                     // Recursive call starts from the current *potentialTarget* as the bend point
+                 // Recursive Call for Next Bend
+                 if (bendsSoFar + 1 < currentAiLevel) {
                      generateShotActions(potentialTarget, newTargetPathPoints, bendsSoFar + 1);
                  }
-
-                 // Optional Performance Limit: Stop checking points along this segment if too far
-                 // if (i >= AI_MAX_SEGMENT_EVAL_POINTS && bendsSoFar + 1 < currentAiLevel) {
-                 //      // Allow bending from this point, but don't explore further along the current straight line segment for *new* bend points
-                 //      break; // uncomment to enable
-                 // }
              }
         });
     }
 
-    // Start shot generation from the AI's current position
     generateShotActions(currentAiPos, [], 0);
 
-
     // --- Evaluate Actions ---
-    let bestAction = { type: 'stay' }; // Default to stay
-    let bestScore = -Infinity; // Start with a very low score
+    let bestAction = { type: 'stay' };
+    let bestScore = -Infinity;
 
-     // Evaluate default 'stay' action first
     bestScore = evaluateAiPotentialAction(bestAction, currentAiPos, currentPlayerPos);
     console.log(`AI Action Eval: stay Score: ${bestScore.toFixed(2)}`);
 
-
-    // Remove duplicate actions (can happen with path generation exploring same targets)
+    // Remove duplicate actions
     const uniqueActions = [];
     const seenActions = new Set();
     possibleActions.forEach(action => {
          let key;
          if(action.type === 'move') key = `move-${action.target.x},${action.target.y}`;
-         else if(action.type === 'stay') key = 'stay'; // Should be unique already
-         else if(action.type === 'shoot') {
-             // Create a key based on the target points of the shoot path
-             key = `shoot-${action.targetPoints.map(p => `${p.x},${p.y}`).join('|')}`;
-         } else key = Math.random().toString(); // Fallback - shouldn't happen
+         else if(action.type === 'stay') key = 'stay';
+         else if(action.type === 'shoot') key = `shoot-${action.targetPoints.map(p => `${p.x},${p.y}`).join('|')}`;
+         else key = Math.random().toString();
 
         if (!seenActions.has(key)) {
             uniqueActions.push(action);
             seenActions.add(key);
-        } else {
-             // console.log("Skipped duplicate AI action:", action); // Optional logging for duplicates
         }
     });
 
 
     uniqueActions.forEach(action => {
-        if (action.type === 'stay') return; // Already evaluated 'stay'
+        if (action.type === 'stay') return;
 
         const score = evaluateAiPotentialAction(action, currentAiPos, currentPlayerPos);
 
-        // Simple logging for evaluation results
          let actionDesc = action.type;
          if(action.type === 'move') actionDesc += ` to ${action.target.x},${action.target.y}`;
          else if(action.type === 'shoot') actionDesc += ` bends: ${action.targetPoints.length - 1}`;
         console.log(`AI Action Eval: ${actionDesc} Score: ${score.toFixed(2)}`);
 
-
-        // Selection logic: Prioritize significantly better scores,
-        // use randomization for scores that are very close.
         if (score > bestScore) {
             bestScore = score;
             bestAction = action;
-        } else if (score >= bestScore - 5) { // Consider actions within a small score range (-5 to +0)
-             if (Math.random() > 0.4) { // 60% chance to pick the new one if close
+        } else if (score >= bestScore - 5) {
+             if (Math.random() > 0.4) {
                  bestScore = score;
                  bestAction = action;
              }
         }
     });
 
-    // --- Select Action ---
-    aiPlannedAction = bestAction;
-    console.log("AI Planned Action:", aiPlannedAction);
+    console.log("AI Chose Action:", bestAction);
+    return bestAction; // Return the chosen action
 }
 
 
@@ -1384,341 +1245,228 @@ function evaluateAiPotentialAction(action, currentAiPos, currentPlayerPos) {
     if (action.type === 'move') {
         predictedAiPos = { ...action.target };
     }
-    // If action is shoot or stay, predictedAiPos is the same as currentAiPos
 
     // (+) Offensive - Hitting Player
     if (action.type === 'shoot') {
-        // The 'hitsPlayer' property was pre-calculated in generateShotActions based on the *valid* path
-        if (action.hitsPlayer) {
-            score += 1200; // High score for hitting the player
-             // Slightly prefer simpler shots (fewer target points/bends)
-             score -= (action.targetPoints.length * 40); // Penalty for complexity
+        if (action.hitsPlayer) { // Use pre-calculated hit status
+            score += 1200;
+            score -= (action.targetPoints.length * 40); // Penalty for complexity
         }
-         // Optional: Bonus for ending the shot near the player, even if not a direct hit?
-         // const lastPathPoint = action.path.length > 0 ? action.path[action.path.length-1] : null;
-         // if (lastPathPoint && distance(lastPathPoint, currentPlayerPos) <= 2) {
-         //      score += 50; // Small bonus for near miss / area denial
-         // }
     }
 
      // (+) Powerup - Collection
     if (action.type === 'move') {
         if (powerUpPositions.some(p => p.x === action.target.x && p.y === action.target.y)) {
-            score += 700; // High score for collecting powerup
+            score += 700;
         }
     }
 
      // (-) Defensive - Being Targeted: Check if player can hit AI's predicted position
-    if (canHitTarget(playerPos, predictedAiPos, playerWeaponLevel)) { // Use the player's weapon level
-        score -= 1000; // Heavy penalty for being hittable
-         // Add extra penalty if AI moves *into* a hittable spot it wasn't in before
-         if (action.type === 'move' && !canHitTarget(playerPos, currentAiPos, playerWeaponLevel)) {
+     // Use player's *current* weapon level
+    if (canHitTarget(currentPlayerPos, predictedAiPos, playerWeaponLevel)) {
+        score -= 1000;
+         if (action.type === 'move' && !canHitTarget(currentPlayerPos, currentAiPos, playerWeaponLevel)) {
               score -= 300; // Extra penalty for moving into danger
          }
     }
 
-    // (+) Defensive - Cover: Check if a *straight* shot from player to predicted pos is blocked by a wall
-     // This is a simplified check for direct line-of-sight cover (weapon level 1 check)
+    // (+) Defensive - Cover: Check if a *straight* shot from player to predicted pos is blocked
     if (!canHitTarget(currentPlayerPos, predictedAiPos, 1)) {
-          score += 100; // Bonus for being behind cover from a straight shot
-         // Bonus for moving further away while gaining cover
+          score += 100;
          if(action.type === 'move' && distance(predictedAiPos, currentPlayerPos) > distance(currentAiPos, currentPlayerPos)){
              score += 50;
          }
     } else {
-         // Small penalty for moving *out* of cover (if the predicted spot *is* straight-line-hittable, and the current wasn't)
          if (action.type === 'move' && !canHitTarget(currentPlayerPos, currentAiPos, 1)) {
-              score -= 80; // Penalty for losing straight-line cover
+              score -= 80;
          }
     }
 
-
-    // (+) Powerup - Proximity: Move towards nearest powerup if not collecting one this turn
+    // (+) Powerup - Proximity
     const nearestPowerup = findNearestPowerup(predictedAiPos);
-    if (nearestPowerup && !powerUpPositions.some(p => p.x === predictedAiPos.x && p.y === predictedAiPos.y)) { // Ensure not double-counting the collection case
+    if (nearestPowerup && !(action.type === 'move' && nearestPowerup.x === action.target.x && nearestPowerup.y === action.target.y)) {
         const distAfter = distance(predictedAiPos, nearestPowerup);
         const nearestBefore = findNearestPowerup(currentAiPos);
         const distBefore = nearestBefore ? distance(currentAiPos, nearestBefore) : Infinity;
 
-        if (distAfter < distBefore) { // Check if the move gets AI closer to *any* powerup
-            // The bonus is higher the closer the powerup is, and the more distance was closed
+        if (distAfter < distBefore) {
             const distanceClosed = distBefore === Infinity ? 0 : distBefore - distAfter;
-            score += Math.max(0, 300 - distAfter * 30) + distanceClosed * 10; // Bonus based on final distance and distance closed
+            score += Math.max(0, 300 - distAfter * 30) + distanceClosed * 10;
         }
     }
 
-     // (+/-) Distance to Player: Prefer a medium distance for potential future shots
+     // (+/-) Distance to Player
      const distToPlayer = distance(predictedAiPos, currentPlayerPos);
-     const idealMinDist = 5; // AI prefers not to be too close
-     const idealMaxDist = GRID_SIZE / 2; // AI prefers not to be too far
+     const idealMinDist = 5;
+     const idealMaxDist = GRID_SIZE / 2;
 
      if (distToPlayer < idealMinDist) {
-         score -= (idealMinDist - distToPlayer) * 40; // Heavier penalty for being too close
+         score -= (idealMinDist - distToPlayer) * 40;
      } else if (distToPlayer > idealMaxDist) {
-          score -= (distToPlayer - idealMaxDist) * 10; // Lighter penalty for being too far
+          score -= (distToPlayer - idealMaxDist) * 10;
      }
 
-
     // (+) Offensive - Setup: Can AI shoot player *next turn* from predicted position?
-     // This is a look-ahead evaluation
-     if (action.type === 'move' || action.type === 'stay') { // Only evaluate setup for moves/stay, not for shooting this turn
-         if (canHitTarget(predictedAiPos, currentPlayerPos, aiWeaponLevel)) { // Check if AI can hit player from its *new* position
-             score += 250; // Bonus for getting into a position where AI can shoot next turn
-             // Bonus if it's a straight shot from the new position?
+     if (action.type === 'move' || action.type === 'stay') {
+         if (canHitTarget(predictedAiPos, currentPlayerPos, aiWeaponLevel)) { // Check using AI's weapon level
+             score += 250;
              if(canHitTarget(predictedAiPos, currentPlayerPos, 1)) {
-                 score += 100; // Extra bonus for getting a straight shot setup
+                 score += 100;
              }
-             // Bonus if player *cannot* shoot back immediately from that position?
-             if(!canHitTarget(currentPlayerPos, predictedAiPos, playerWeaponLevel)){
-                 score += 150; // Bonus for a relatively safe attacking position
+             if(!canHitTarget(currentPlayerPos, predictedAiPos, playerWeaponLevel)){ // Check if player can hit back
+                 score += 150;
              }
          }
      }
 
-    // Add small random factor to break ties more naturally and add unpredictability
-    score += (Math.random() - 0.5) * 5; // Random nudge between -2.5 and 2.5
+    score += (Math.random() - 0.5) * 5; // Random nudge
 
     return score;
 }
 
+// --- Action Execution and Turn Management ---
 
-// --- Resolution Phase (Modified for Move-First Logic) ---
+async function executeAction(action) {
+    if (isResolving || gameOverState) return;
 
-async function startResolution() {
-    console.log("Starting Resolution Phase (Move First)...");
-    if (isResolving) return;
+    console.log(`Executing ${currentPlayer}'s action:`, action);
     isResolving = true;
-    gamePhase = 'resolving';
-    updatePhaseIndicator();
-    disablePlanningControls(); // Ensure controls are disabled and highlights cleared
+    disablePlanningControls(); // Disable player input during resolution
+    updatePhaseIndicator(); // Show "Executing..."
 
-    const initialPlayerPos = { ...playerPos };
-    const initialAiPos = { ...aiPos };
-    let conflictMessages = [];
-    let playerWasHit = false;
-    let aiWasHit = false;
+    let actionSuccess = true; // Assume success initially
+    let wasHit = false;
+    let collectedPowerup = false;
+    let messageLog = []; // Accumulate messages for this turn
 
-    // --- Step 1: Resolve Movement Conflicts & Calculate Final Positions ---
-    setMessage("Resolving Movement...");
-    let finalPlayerPos = { ...initialPlayerPos }; // Assume no movement initially
-    let finalAiPos = { ...initialAiPos }; // Assume no movement initially
-    let playerMoveAttempted = playerPlannedAction?.type === 'move';
-    let aiMoveAttempted = aiPlannedAction?.type === 'move';
-    let playerMoveValidated = false; // Does the attempted move pass initial checks?
-    let aiMoveValidated = false; // Does the attempted move pass initial checks?
+    const activePlayer = currentPlayer; // Store who is acting
+    const activePlayerMesh = (activePlayer === 'player') ? playerMesh : aiMesh;
+    const activePlayerPosRef = (activePlayer === 'player') ? playerPos : aiPos; // Direct reference for updating
+    const opponentPos = (activePlayer === 'player') ? aiPos : playerPos;
+    const opponentMesh = (activePlayer === 'player') ? aiMesh : playerMesh;
+    const laserMaterial = (activePlayer === 'player') ? playerLaserMaterial : aiLaserMaterial;
+    let weaponLevelRef = (activePlayer === 'player') ? playerWeaponLevel : aiWeaponLevel;
 
-    const pTarget = playerMoveAttempted ? playerPlannedAction.target : null;
-    const aTarget = aiMoveAttempted ? aiPlannedAction.target : null;
 
-    // Validate moves individually first (adjacent, not wall, not currently occupied by opponent)
-    if (playerMoveAttempted) {
-        if (isValidMoveTarget(pTarget, initialPlayerPos, initialAiPos)) {
-            playerMoveValidated = true;
+    if (action.type === 'move') {
+        setMessage(`${activePlayer.toUpperCase()} moves...`);
+        // Double-check validity against current opponent position (important for alternating turns)
+        if (action.target.x === opponentPos.x && action.target.y === opponentPos.y) {
+             messageLog.push(`${activePlayer.toUpperCase()} move blocked by opponent!`);
+             actionSuccess = false;
         } else {
-            conflictMessages.push("Player move blocked!");
+             await animateMove(activePlayerMesh, action.target);
+             // Update the position variable AFTER animation
+             activePlayerPosRef.x = action.target.x;
+             activePlayerPosRef.y = action.target.y;
+             messageLog.push(`${activePlayer.toUpperCase()} moved to ${action.target.x},${action.target.y}.`);
+
+             // Check for powerup collection at the NEW position
+             const powerupIndex = powerUpPositions.findIndex(p => p.x === activePlayerPosRef.x && p.y === activePlayerPosRef.y);
+             if (powerupIndex !== -1) {
+                 const newLevel = Math.min(MAX_WEAPON_LEVEL, weaponLevelRef + 1);
+                 if (activePlayer === 'player') playerWeaponLevel = newLevel; else aiWeaponLevel = newLevel;
+                 collectedPowerup = true;
+                 messageLog.push(`${activePlayer.toUpperCase()} collected weapon upgrade! (Level ${newLevel})`);
+                 removePowerup3D(activePlayerPosRef.x, activePlayerPosRef.y);
+                 powerUpPositions.splice(powerupIndex, 1);
+                 updateWeaponLevelInfo(); // Update UI and 3D visuals
+             }
         }
-    }
-    if (aiMoveAttempted) {
-        if (isValidMoveTarget(aTarget, initialAiPos, initialPlayerPos)) {
-            aiMoveValidated = true;
-        } else {
-            conflictMessages.push("AI move blocked!");
-        }
-    }
 
+    } else if (action.type === 'shoot') {
+         setMessage(`${activePlayer.toUpperCase()} fires!`);
+         // Calculate path based on the player's position *at the start of the shot* and opponent's *current* position
+         const startPos = (activePlayer === 'player') ? playerPos : aiPos; // Use the updated position if they moved first
+         const finalPathResult = calculateFullPathFromTargets(startPos, action.targetPoints, opponentPos);
 
-    // Check for collisions ONLY if both are attempting a valid move
-    if (playerMoveValidated && aiMoveValidated) {
-         const pTargetIsAiInitial = pTarget.x === initialAiPos.x && pTarget.y === initialAiPos.y;
-         const aTargetIsPlayerInitial = aTarget.x === initialPlayerPos.x && aTarget.y === initialPlayerPos.y;
-         const sameTarget = pTarget.x === aTarget.x && pTarget.y === aTarget.y;
+         if (finalPathResult.isValid) {
+             createLaserBeam(finalPathResult.path, laserMaterial);
+             messageLog.push(`${activePlayer.toUpperCase()} shot path confirmed.`);
 
-        if (sameTarget) { // Both target the same empty cell
-             conflictMessages.push("Collision! Both tried to move to the same cell.");
-            // Neither moves - they bounce
-            playerMoveValidated = false;
-            aiMoveValidated = false;
-        } else if (pTargetIsAiInitial && aTargetIsPlayerInitial) { // They attempt to swap
-            conflictMessages.push("Players swapped positions!");
-            // Both moves are valid and succeed
-            finalPlayerPos = { ...pTarget };
-            finalAiPos = { ...aTarget };
-             // No change to validated flags, they succeed
-        } else if (pTargetIsAiInitial) { // Player targeted AI's *initial* position, but AI is moving away
-             // Player move fails because AI is leaving the spot, but player can't occupy a spot the AI *was* just in?
-             // Rule: If you target a spot the opponent started on, your move is blocked *unless* they swapped with you.
-             // This prevents "chasing into a spot".
-             conflictMessages.push("Player move blocked!");
-             playerMoveValidated = false;
-             // AI's validated move proceeds to its target aTarget
-             finalAiPos = { ...aTarget };
+             // Check hit based on calculated path and opponent's position
+             wasHit = finalPathResult.hitTarget; // Use the result from calculateFullPathFromTargets
+             if (wasHit) {
+                 messageLog.push(`${activePlayer === 'player' ? 'AI' : 'Player'} was hit!`);
+             } else {
+                 messageLog.push(`Shot missed!`);
+             }
+             await wait(SHOT_FLASH_DURATION); // Wait for laser effect
 
-        } else if (aTargetIsPlayerInitial) { // AI targeted Player's *initial* position, but Player is moving away
-             // AI move fails for the same reason
-             conflictMessages.push("AI move blocked!");
-             aiMoveValidated = false;
-             // Player's validated move proceeds to its target pTarget
-             finalPlayerPos = { ...pTarget };
-        } else {
-            // No collision, both valid moves succeed to distinct targets
-            finalPlayerPos = { ...pTarget };
-            finalAiPos = { ...aTarget };
-        }
-    } else if (playerMoveValidated && !aiMoveAttempted) { // Only player moves, AI stays
-         if (pTarget.x === initialAiPos.x && pTarget.y === initialAiPos.y) { // Player tries to move onto stationary AI
-             conflictMessages.push("Player move blocked!");
-             playerMoveValidated = false; // Player move fails
-             // AI stays at initialAiPos
          } else {
-             // Player move succeeds
-             finalPlayerPos = { ...pTarget };
-             // AI stays at initialAiPos
+             messageLog.push(`${activePlayer.toUpperCase()} shot blocked!`);
+             actionSuccess = false;
+             await wait(ACTION_RESOLVE_DELAY); // Short delay even if blocked
          }
-    } else if (!playerMoveAttempted && aiMoveValidated) { // Only AI moves, Player stays
-         if (aTarget.x === initialPlayerPos.x && aTarget.y === initialPlayerPos.y) { // AI tries to move onto stationary Player
-             conflictMessages.push("AI move blocked!");
-             aiMoveValidated = false; // AI move fails
-             // Player stays at initialPlayerPos
+
+    } else if (action.type === 'stay') {
+        setMessage(`${activePlayer.toUpperCase()} stays put.`);
+        messageLog.push(`${activePlayer.toUpperCase()} did not move.`);
+        await wait(ACTION_RESOLVE_DELAY); // Small delay for 'stay' action
+    }
+
+    // --- Post-Action Checks ---
+    setMessage(messageLog.join(" ")); // Display accumulated messages for the turn
+
+    if (wasHit) {
+         endGame(`${activePlayer.toUpperCase()} Wins!`, activePlayer);
+         return; // Game Over
+    }
+
+    if (!gameOverState) {
+         maybeSpawnPowerup(); // Chance to spawn powerup after successful action
+
+         // Switch Turns
+         currentPlayer = (activePlayer === 'player') ? 'ai' : 'player';
+         gamePhase = currentPlayer + 'Turn';
+         isResolving = false; // Resolution finished for this turn
+
+         await wait(ACTION_RESOLVE_DELAY); // Short pause before next turn starts
+
+         if (currentPlayer === 'ai') {
+             triggerAiTurn();
          } else {
-             // AI move succeeds
-             finalAiPos = { ...aTarget };
-             // Player stays at initialPlayerPos
+             // It's player's turn
+             setMessage("Your Turn: Plan your action.");
+             updatePhaseIndicator();
+             enablePlanningControls();
+             setPlanningMode('move'); // Reset planning mode for player
          }
-    }
-    // If neither attempted a move, or both failed validation, final positions are their initial positions.
-
-    // --- Step 2: Execute Movement Animation ---
-    // Animate only if the final position is different from the initial position
-    const playerMovePromise = (finalPlayerPos.x !== initialPlayerPos.x || finalPlayerPos.y !== initialPlayerPos.y)
-                            ? animateMove(playerMesh, finalPlayerPos) : Promise.resolve();
-    const aiMovePromise = (finalAiPos.x !== initialAiPos.x || finalAiPos.y !== initialAiPos.y)
-                            ? animateMove(aiMesh, finalAiPos) : Promise.resolve();
-
-    await Promise.all([playerMovePromise, aiMovePromise]); // Wait for both animations
-
-    // --- Step 3: Update Logical Positions & Collect Powerups ---
-    // Update state variables AFTER animation completes
-    playerPos = { ...finalPlayerPos };
-    aiPos = { ...finalAiPos };
-
-    // Check for powerup collection at the NEW positions
-    const collectedMsg = [];
-    const powerupIndexPlayer = powerUpPositions.findIndex(p => p.x === playerPos.x && p.y === playerPos.y);
-    if (powerupIndexPlayer !== -1) {
-        playerWeaponLevel = Math.min(MAX_WEAPON_LEVEL, playerWeaponLevel + 1);
-        collectedMsg.push("Player collected weapon upgrade!");
-        removePowerup3D(playerPos.x, playerPos.y); // Remove 3D mesh
-        powerUpPositions.splice(powerupIndexPlayer, 1); // Remove from logical list
-        updateWeaponLevelInfo();
-    }
-
-    const powerupIndexAi = powerUpPositions.findIndex(p => p.x === aiPos.x && p.y === aiPos.y);
-    if (powerupIndexAi !== -1) {
-         aiWeaponLevel = Math.min(MAX_WEAPON_LEVEL, aiWeaponLevel + 1);
-         collectedMsg.push("AI collected weapon upgrade!");
-         removePowerup3D(aiPos.x, aiPos.y); // Remove 3D mesh
-         powerUpPositions.splice(powerupIndexAi, 1); // Remove from logical list
-         updateWeaponLevelInfo();
-    }
-
-    // Combine conflict messages and collected messages
-    const step2Message = conflictMessages.join(" ") + (conflictMessages.length > 0 && collectedMsg.length > 0 ? " " : "") + collectedMsg.join(" ");
-     setMessage(step2Message || "Movement resolved. Calculating shots...");
-
-
-    // Short delay after movement/collection before firing
-    await wait(RESOLVE_STEP_DELAY);
-
-
-    // --- Step 4: Calculate Shot Outcomes BASED ON FINAL POSITIONS ---
-    // Recalculate paths based on final positions, as original planned paths were based on *initial* positions
-    // This is crucial for movement-first mechanics.
-    const finalPlayerShotPathResult = playerPlannedAction?.type === 'shoot'
-        ? calculateFullPathFromTargets(initialPlayerPos, playerPlannedAction.targetPoints, aiPos) // Path starts from *initial* pos, targets are absolute cells, checked against *final* AI pos
-        : { path: [], isValid: false, hitTarget: false };
-
-    const finalAiShotPathResult = aiPlannedAction?.type === 'shoot'
-         ? calculateFullPathFromTargets(initialAiPos, aiPlannedAction.targetPoints, playerPos) // Path starts from *initial* pos, targets are absolute cells, checked against *final* Player pos
-         : { path: [], isValid: false, hitTarget: false };
-
-
-    // A shot hits if its calculated path is valid AND the opponent's *final* position is on that path.
-    playerWasHit = finalAiShotPathResult.isValid && finalAiShotPathResult.path.some(p => p.x === playerPos.x && p.y === playerPos.y);
-    aiWasHit = finalPlayerShotPathResult.isValid && finalPlayerShotPathResult.path.some(p => p.x === aiPos.x && p.y === aiPos.y);
-
-    console.log("Player Shot Valid/Hits AI:", finalPlayerShotPathResult.isValid, aiWasHit);
-    console.log("AI Shot Valid/Hits Player:", finalAiShotPathResult.isValid, playerWasHit);
-
-
-    // --- Step 5: Visualize Shots ---
-    const shotMsg = [];
-    if (playerPlannedAction?.type === 'shoot' && finalPlayerShotPathResult.isValid) {
-         shotMsg.push("Player Fired!");
-         createLaserBeam(finalPlayerShotPathResult.path, playerLaserMaterial);
-    } else if (playerPlannedAction?.type === 'shoot' && !finalPlayerShotPathResult.isValid) {
-        shotMsg.push("Player shot blocked!");
-    }
-
-    if (aiPlannedAction?.type === 'shoot' && finalAiShotPathResult.isValid) {
-         shotMsg.push("AI Fired!");
-         createLaserBeam(finalAiShotPathResult.path, aiLaserMaterial);
-    } else if (aiPlannedAction?.type === 'shoot' && !finalAiShotPathResult.isValid) {
-         shotMsg.push("AI shot blocked!");
-    }
-
-    setMessage((step2Message ? step2Message + " " : "") + (shotMsg.length > 0 ? shotMsg.join(" ") : "No shots fired."));
-
-
-    await wait(SHOT_FLASH_DURATION + RESOLVE_STEP_DELAY); // Wait for laser effects and a bit more
-
-    // --- Step 6: Determine Game Outcome & Transition ---
-    let finalMessage = conflictMessages.join(" ") + (conflictMessages.length > 0 && collectedMsg.length > 0 ? " " : "") + collectedMsg.join(" ") + (shotMsg.length > 0 ? " " + shotMsg.join(" ") : "");
-
-
-    if (playerWasHit && aiWasHit) {
-        endGame("Draw! Both players hit each other!", 'Draw');
-    } else if (playerWasHit) {
-        endGame("AI Wins! Player was hit.", 'AI');
-    } else if (aiWasHit) {
-        endGame("Player Wins! AI was hit.", 'Player');
-    } else {
-        // Game Continues
-        gamePhase = 'planning';
-        playerPlannedAction = null;
-        aiPlannedAction = null;
-        isResolving = false;
-
-        maybeSpawnPowerup(); // Chance to spawn a new powerup
-
-        setMessage(finalMessage || "Plan your next action."); // Use combined messages or default
-        updatePhaseIndicator();
-        enablePlanningControls();
-        setPlanningMode('move'); // Reset to default move mode
-    }
+     } else {
+          isResolving = false; // Ensure resolving flag is reset if game ended immediately
+     }
 }
+
+function triggerAiTurn() {
+    setMessage("AI is thinking...");
+    updatePhaseIndicator();
+    disablePlanningControls(); // Ensure player controls are off
+
+    setTimeout(() => {
+        if (gameOverState) return; // Check game over status again before AI acts
+        const aiAction = planAiAction();
+        executeAction(aiAction); // Execute the AI's chosen action
+    }, AI_THINK_DELAY);
+}
+
 
 // --- Animate Move Function ---
 function animateMove(mesh, targetGridPos) {
     return new Promise(resolve => {
         const startPos3D = mesh.position.clone();
-         // Calculate the correct target Y position based on unit type and grid position
-         // Ensure it ends up resting on the floor, considering unit pivot point
          const targetY = mesh.userData.type === 'player'
-             ? CELL_3D_SIZE * 0.9 / 2 // Player capsule height / 2
-             : CELL_3D_SIZE * 1.0 / 2; // AI cone height / 2
+             ? CELL_3D_SIZE * 0.9 / 2
+             : CELL_3D_SIZE * 1.0 / 2;
 
         const targetPos3D = get3DPosition(targetGridPos.x, targetGridPos.y, targetY);
 
-         // Add a small hop animation: up, then down to target
         const hopHeight = CELL_3D_SIZE * 0.3;
         const midPos3D = new THREE.Vector3(
              (startPos3D.x + targetPos3D.x) / 2,
-             Math.max(startPos3D.y, targetPos3D.y) + hopHeight, // Hop relative to highest point
+             Math.max(startPos3D.y, targetPos3D.y) + hopHeight,
              (startPos3D.z + targetPos3D.z) / 2
          );
 
-
-        // Tween to mid position (hop up)
         new TWEEN.Tween(startPos3D)
             .to(midPos3D, MOVEMENT_DURATION * 0.5)
             .easing(TWEEN.Easing.Quadratic.Out)
@@ -1726,14 +1474,13 @@ function animateMove(mesh, targetGridPos) {
                 mesh.position.copy(startPos3D);
             })
             .onComplete(() => {
-                // Tween from mid position to final target position (hop down)
-                 new TWEEN.Tween(startPos3D) // Continue from current animated value
+                 new TWEEN.Tween(startPos3D)
                      .to(targetPos3D, MOVEMENT_DURATION * 0.5)
                      .easing(TWEEN.Easing.Quadratic.In)
                      .onUpdate(() => {
                          mesh.position.copy(startPos3D);
                      })
-                     .onComplete(resolve) // Resolve promise when final tween finishes
+                     .onComplete(resolve)
                      .start();
             })
             .start();
@@ -1758,13 +1505,13 @@ function spawnPowerup() {
     while (attempts < 50) {
         const x = Math.floor(Math.random() * GRID_SIZE); const y = Math.floor(Math.random() * GRID_SIZE);
         const isFloor = isValid(x,y) && grid[y][x] === 'floor';
-        // Check if cell is *logically* unoccupied (ignore meshes)
+        // Check logical unoccupied status
         const isUnoccupiedLogically = (x !== playerPos.x || y !== playerPos.y) && (x !== aiPos.x || y !== aiPos.y) && !powerUpPositions.some(p => p.x === x && p.y === y);
 
         if (isFloor && isUnoccupiedLogically) {
-            powerUpPositions.push({ x, y }); // Add to logical list
-            const newPowerup = createPowerup3D(x, y); // Create 3D mesh
-            powerupMeshes.push(newPowerup); // Add to mesh list for animation/disposal
+            powerUpPositions.push({ x, y });
+            const newPowerup = createPowerup3D(x, y);
+            powerupMeshes.push(newPowerup);
             console.log(`Spawned powerup at ${x},${y}`); return true;
         }
         attempts++;
@@ -1779,16 +1526,15 @@ function endGame(message, winner) {
     gameOverState = { winner: winner, message: message };
     setMessage(message);
     updatePhaseIndicator();
-    disablePlanningControls(); // Ensure controls stay disabled
+    disablePlanningControls(); // Keep controls disabled
     isResolving = false;
-    // Optional: Add a visual effect for game over (e.g., camera shake, color filter)
 }
 
 // --- Utility Functions ---
 function isValid(x, y) { return x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE; }
 function isWall(x, y) { return isValid(x, y) && grid[y][x] === 'wall'; }
 
-// getValidMoves: Checks adjacency and ensures target is not a wall or opponent's *current* position
+// getValidMoves: Checks adjacency, floor, and NOT opponent's current position
 function getValidMoves(unitPos, opponentPos) {
     const moves = [];
     const directions = [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }];
@@ -1800,20 +1546,6 @@ function getValidMoves(unitPos, opponentPos) {
         }
     });
     return moves;
-}
-
-// isValidMoveTarget: Checks if a *proposed target* is valid for a unit moving from *unitPos*,
-// considering *opponentPos*. Used during resolution conflict checking.
-function isValidMoveTarget(target, unitPos, opponentPos){
-     if (!target || !isValid(target.x, target.y) || grid[target.y][target.x] === 'wall') return false; // Must be on floor
-     const dx = Math.abs(target.x - unitPos.x);
-     const dy = Math.abs(target.y - unitPos.y);
-     if (!((dx === 1 && dy === 0) || (dx === 0 && dy === 1))) return false; // Must be adjacent
-     // The check against opponent's *current* position is handled by getValidMoves for planning.
-     // For resolution validation, we just need to know if the *target cell itself* is blocked by the stationary opponent.
-     // If the opponent is also moving, collision rules apply later.
-     // Simplified: Just check adjacency and if it's a floor tile. Collision with moving opponent handled in resolution.
-     return true;
 }
 
 function distance(pos1, pos2) {
@@ -1833,27 +1565,24 @@ function findNearestPowerup(pos) {
      return nearest;
 }
 
-// canHitTarget: Checks if attacker can hit target with given weapon level,
-// assuming target is stationary at targetPos.
-// opponentActualPos is the *actual* current position of the opponent being targeted
-// (needed to check if a path cell is occupied by the opponent)
-// Simplified this function to not need opponentActualPos explicitly, as the grid
-// and wall status is sufficient, and the targetPos is where we check for the hit.
+// canHitTarget: Checks if attacker can reach target cell with weapon level, considering walls.
+// Does NOT check if the target is currently occupied, just reachability.
 function canHitTarget(attackerPos, targetPos, attackerWeaponLevel) {
-    // Base cases
     if (!isValid(attackerPos.x, attackerPos.y) || !isValid(targetPos.x, targetPos.y) || grid[targetPos.y][targetPos.x] === 'wall') {
-        return false; // Attacker or target is in/on a wall or off-grid
+        return false;
     }
      if (attackerPos.x === targetPos.x && attackerPos.y === targetPos.y) {
-         return true; // Attacker is on the target cell (unlikely but possible)
+         return true;
      }
 
     const maxBends = attackerWeaponLevel - 1;
 
     // BFS search for a valid path within bend limits
-    // State: { pos: current cell, bendsMade: bends taken to reach pos, lastDir: direction taken to reach pos }
+    // State: { pos: current cell, bendsMade: bends to reach pos, lastDir: direction taken to reach pos }
     const q = [{ pos: attackerPos, bendsMade: -1, lastDir: { dx: 0, dy: 0 } }];
-    const visited = new Set([`${attackerPos.x},${attackerPos.y},-1,0,0`]); // Track pos, bends, and last direction
+     // Visited needs to track bends *and* direction to prevent cycles and ensure bend limits are checked correctly for each path variation.
+     // Key: "x,y,bends,lastDx,lastDy"
+    const visited = new Set([`${attackerPos.x},${attackerPos.y},-1,0,0`]);
 
     while (q.length > 0) {
         const { pos, bendsMade, lastDir } = q.shift();
@@ -1861,62 +1590,53 @@ function canHitTarget(attackerPos, targetPos, attackerWeaponLevel) {
         const directions = [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }];
 
         for (const dir of directions) {
-            // Prevent reversing direction immediately
-             if (dir.dx === -lastDir.dx && dir.dy === -lastDir.dy && (dir.dx !== 0 || dir.dy !== 0)) {
-                 continue;
+            // Prevent immediate 180 turn unless starting (lastDir is 0,0)
+             if (lastDir.dx !== 0 || lastDir.dy !== 0) {
+                 if (dir.dx === -lastDir.dx && dir.dy === -lastDir.dy) {
+                     continue;
+                 }
              }
 
-            let currentExplorePos = { ...pos };
-            let currentBends = bendsMade;
-
-            // If we are changing direction from the last step, it counts as a bend (unless this is the first step)
+            // Calculate bends for the *next* step/segment in this direction
+            let bendsForNextSegment = bendsMade;
             const isBend = (lastDir.dx !== 0 || lastDir.dy !== 0) && (dir.dx !== lastDir.dx || dir.dy !== lastDir.dy);
             if (isBend) {
-                 currentBends++;
-             }
-
-             // Check if we exceed max bends
-            if (currentBends > maxBends) {
-                continue; // Cannot take this path, too many bends
+                bendsForNextSegment++;
             }
 
+            if (bendsForNextSegment > maxBends) {
+                 continue; // Too many bends required for this segment
+             }
 
-             // Traverse along the current direction
-             for (let i = 1; i < GRID_SIZE * 2; i++) { // Check up to twice the grid size to be safe
-                 const nextX = pos.x + dir.dx * i;
-                 const nextY = pos.y + dir.dy * i;
-                 currentExplorePos = { x: nextX, y: nextY };
+            // Explore along the current direction
+            for (let i = 1; i < GRID_SIZE * 2; i++) {
+                const nextX = pos.x + dir.dx * i;
+                const nextY = pos.y + dir.dy * i;
+                const currentExplorePos = { x: nextX, y: nextY };
 
+                if (!isValid(nextX, nextY) || grid[nextY][nextX] === 'wall') {
+                     break; // Hit wall or went off grid, stop exploring this direction
+                }
 
-                 if (!isValid(nextX, nextY) || grid[nextY][nextX] === 'wall') {
-                      // Hit a wall or went off-grid. This straight segment is blocked past the previous cell.
-                      // If the target was on this blocked segment, it's unreachable this way.
-                      break; // Stop exploring further along this direction
-                 }
+                // Check if this cell is the target
+                if (currentExplorePos.x === targetPos.x && currentExplorePos.y === targetPos.y) {
+                    return true; // Found a valid path within bend limits
+                }
 
-                 // Check if this cell is the target
-                 if (currentExplorePos.x === targetPos.x && currentExplorePos.y === targetPos.y) {
-                     return true; // Found a valid path to the target within bend limits
-                 }
+                // Key for visited set uses the position *reached* and the bend count *used to reach it*
+                // along with the direction *taken to reach it*.
+                const nextStateKey = `${currentExplorePos.x},${currentExplorePos.y},${bendsForNextSegment},${dir.dx},${dir.dy}`;
 
-                 // Add the next cell to the queue if not visited with this bend count and direction
-                 // The key needs to include bendsMade and the direction *taken to reach* the next cell
-                const dirToNext = { dx: Math.sign(currentExplorePos.x - pos.x), dy: Math.sign(currentExplorePos.y - pos.y) };
-                const nextStateKey = `${currentExplorePos.x},${currentExplorePos.y},${currentBends},${dirToNext.dx},${dirToNext.dy}`;
-                // Check if we've visited this cell with this specific number of bends *ending in this direction*.
-                // This prevents infinite loops and ensures we find the shortest path *in terms of bends*.
                 if (!visited.has(nextStateKey)) {
                     visited.add(nextStateKey);
-                    // Queue the *next* potential bend point (currentExplorePos)
-                    // The bendsMade counter *for the state being added to the queue* is the bends used to get *to this point*.
-                     q.push({ pos: currentExplorePos, bendsMade: currentBends, lastDir: dirToNext });
+                    // Add the *current position* to the queue, along with the bends count *used to get there*
+                    // and the direction *taken to get there*. The BFS will then explore bends *from* this point.
+                    q.push({ pos: currentExplorePos, bendsMade: bendsForNextSegment, lastDir: dir });
                 }
-             }
+            }
         }
     }
-
-    // If the queue is empty and we haven't reached the target, it's unreachable
-    return false;
+    return false; // Target not reachable within bend limits
 }
 
 
