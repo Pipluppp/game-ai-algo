@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Grid Laser Duel 3D - Enhanced</title>
+    <title>Grid Missile Duel 3D</title> <!-- Changed Title -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,22 +18,28 @@
 
         <!-- Fixed UI Panel -->
         <div id="ui-panel">
-            <h1>Grid Laser Duel</h1>
+            <h1>Grid Missile Duel</h1> <!-- Changed Title -->
 
             <div class="ui-section info-panel">
                 <h2>Status</h2>
                 <p id="phaseIndicator">Phase: Planning</p>
-                <div id="messageAreaContainer"><p id="messageArea">Plan your action.</p></div> <!-- Wrapper for message area -->
+                <div id="messageAreaContainer"><p id="messageArea">Plan your action.</p></div>
+                 <!-- Added planning cost display -->
+                 <div id="planningInfo">
+                    <span id="planFuelCostInfo"></span>
+                 </div>
             </div>
+
 
             <div class="ui-section controls-panel">
                 <h2>Player Controls</h2>
                 <div class="mode-select">
                     <button id="btnPlanMove" class="mode-button">Plan Move</button>
-                    <button id="btnPlanShoot" class="mode-button">Plan Shoot</button>
+                    <button id="btnPlanShoot" class="mode-button">Plan Missile</button> <!-- Changed Button Text -->
                 </div>
-                <p id="weaponLevelInfo">Your Weapon Level: 1</p>
-                 <p id="aiWeaponLevelInfo">AI Weapon Level: 1</p>
+                <!-- Changed IDs and Text -->
+                <p id="playerFuelInfo">Your Fuel: 10</p>
+                <p id="aiFuelInfo">AI Fuel: 10</p>
             </div>
 
             <div class="ui-section game-actions-panel">

@@ -132,11 +132,24 @@ p {
      line-height: 1.5;
 }
 
+/* Added styles for Planning Info */
+#planningInfo {
+    margin-top: 12px;
+    padding-top: 8px;
+    border-top: 1px dashed #4b5263;
+    min-height: 1.5em; /* Reserve space */
+    text-align: center;
+}
+#planFuelCostInfo {
+    font-size: 0.95em;
+    font-weight: 600;
+}
+/* End of Added styles */
 
 /* Controls Specifics */
-#weaponLevelInfo, #aiWeaponLevelInfo {
+#playerFuelInfo, #aiFuelInfo { /* Updated selectors */
     font-weight: 600;
-    color: #98c379; /* Greenish for levels */
+    color: #98c379; /* Greenish for fuel */
     font-size: 1em;
     margin-bottom: 5px; /* Less space below levels */
     text-shadow: 0 0 3px rgba(152, 195, 121, 0.3);
@@ -277,6 +290,10 @@ button:disabled {
     #messageAreaContainer { min-height: 4em; margin-top: 10px; }
     #messageArea { font-size: 0.95em; }
 
+    /* Ensure planning info fits */
+    #planningInfo { margin-top: 8px; padding-top: 5px; }
+    #planFuelCostInfo { font-size: 0.9em; }
+
     button { padding: 10px 15px; font-size: 1em; margin-bottom: 8px;}
     button:last-child { margin-bottom: 0; } /* Remove margin on last button in section */
 
@@ -325,6 +342,11 @@ button:disabled {
      }
      #messageAreaContainer { min-height: 3.5em; margin-top: 8px; padding: 8px 10px;}
      #messageArea { font-size: 0.9em; }
+
+     /* Ensure planning info fits */
+    #planningInfo { margin-top: 8px; padding-top: 5px; }
+    #planFuelCostInfo { font-size: 0.85em; }
+
 
      p { font-size: 0.9em; margin-bottom: 6px;}
 
