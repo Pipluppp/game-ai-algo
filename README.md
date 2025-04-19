@@ -1,0 +1,1 @@
+# Apply algo to some game project
