@@ -346,7 +346,7 @@ function generateGrid() {
         grid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill("floor"));
         let wallCount = 0;
         const totalCells = GRID_SIZE * GRID_SIZE;
-        const targetWallCount = Math.floor(totalCells * WALL_DENSITY);
+        const targetWallCount = Math.floor(totalCells * WALL_DENSITY) * 0.7;
 
         while (wallCount < targetWallCount) {
             const x = Math.floor(Math.random() * GRID_SIZE);
