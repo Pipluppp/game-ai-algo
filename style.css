@@ -154,6 +154,15 @@ p {
     margin-bottom: 5px; /* Less space below levels */
     text-shadow: 0 0 3px rgba(152, 195, 121, 0.3);
 }
+/* Added for health - similar style to fuel */
+#playerHealthInfo, #aiHealthInfo {
+    font-weight: 600;
+    color: #e06c75; /* Reddish for health */
+    font-size: 1em;
+    margin-bottom: 5px;
+    text-shadow: 0 0 3px rgba(224, 108, 117, 0.3);
+}
+
 
 /* Buttons */
 button {
@@ -353,4 +362,16 @@ button:disabled {
      button { font-size: 0.95em; padding: 8px 12px; margin-bottom: 8px;}
      .mode-select { flex-direction: column; gap: 8px;} /* Stack mode buttons */
      .mode-select button { width: 100%; margin-bottom: 0;}
+}
+
+/* Status grid layout */
+.status-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Two equal columns */
+    gap: 0px 10px; /* Row gap 0, Column gap 10px */
+    margin-bottom: 15px; /* Space below the grid */
+}
+
+.status-grid p {
+    margin: 2px 0; /* Reduce vertical margins for status items */
 }
