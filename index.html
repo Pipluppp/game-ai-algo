@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Grid Missile Duel 3D - Turn Cost</title> <!-- Updated Title -->
+    <title>Grid Missile Duel 3D - Health & Fuel</title> <!-- Updated Title -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -32,14 +32,17 @@
 
 
             <div class="ui-section controls-panel">
-                <h2>Player Controls</h2>
+                <h2>Player Status & Controls</h2> <!-- Renamed Section -->
+                <div class="status-grid"> <!-- New Grid for Stats -->
+                     <p id="playerHealthInfo">Your Health: 3 / 3</p> <!-- New Health -->
+                     <p id="playerFuelInfo">Your Fuel: 10</p>
+                     <p id="aiHealthInfo">AI Health: 3 / 3</p>       <!-- New Health -->
+                     <p id="aiFuelInfo">AI Fuel: 10</p>
+                 </div>
                 <div class="mode-select">
                     <button id="btnPlanMove" class="mode-button">Plan Move</button>
                     <button id="btnPlanShoot" class="mode-button">Plan Missile</button>
                 </div>
-                <!-- IDs and Text remain the same -->
-                <p id="playerFuelInfo">Your Fuel: 10</p>
-                <p id="aiFuelInfo">AI Fuel: 10</p>
             </div>
 
             <div class="ui-section game-actions-panel">

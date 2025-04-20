@@ -5,6 +5,7 @@ import TWEEN from "@tweenjs/tween.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { ExtrudeGeometry } from "three"; // Needed for Hearts
 
 // --- DOM Elements ---
 const canvasContainer = document.getElementById("gameCanvasContainer");
@@ -16,6 +17,8 @@ const phaseIndicator = document.getElementById("phaseIndicator");
 const messageArea = document.getElementById("messageArea");
 const playerFuelInfo = document.getElementById("playerFuelInfo");
 const aiFuelInfo = document.getElementById("aiFuelInfo");
+const playerHealthInfo = document.getElementById("playerHealthInfo"); // New
+const aiHealthInfo = document.getElementById("aiHealthInfo");       // New
 const planFuelCostInfo = document.getElementById("planFuelCostInfo");
 
 // --- Game Constants ---
@@ -29,6 +32,8 @@ const INITIAL_POWERUP_COUNT = 8;
 const AI_DISTANCE_BIAS = 0.95;
 const BASE_MOVE_COST = 1;
 const TURN_PENALTY = 1;
+const INITIAL_HEALTH = 3; // New: Starting health
+const MAX_POWERUPS = Math.floor(GRID_SIZE * GRID_SIZE * 0.08); // New: Limit concurrent powerups
 
 // Timing Constants
 const MISSILE_TRAVEL_DURATION = 1200;
@@ -42,7 +47,6 @@ const FUEL_EXPLOSION_RADIUS = 2; // Manhattan distance for blast radius destruct
 const FUEL_EXPLOSION_SCALE_MULTIPLIER = 1.8; // How much bigger fuel explosions are
 const FUEL_EXPLOSION_PARTICLE_MULTIPLIER = 2.0; // How many more particles fuel explosions have
 
-
 // --- Three.js Setup ---
 let scene, camera, renderer, controls, composer;
 let gameBoardGroup;
@@ -50,7 +54,7 @@ let floorMeshes = [];
 let wallMeshes = [];
 let powerupMeshes = []; // Fuel Cells (Stores {mesh, pos})
 let playerMesh, aiMesh;
-let playerFuelIndicator, aiFuelIndicator;
+let playerHeartsGroup, aiHeartsGroup; // New: Groups for heart indicators
 let activeHighlights = [];
 let activeProjectiles = []; // Holds missile meshes and trails (explosions manage their own cleanup)
 
@@ -87,6 +91,14 @@ const aiMaterial = new THREE.MeshStandardMaterial({
 	emissive: 0x6b1a22,
 	emissiveIntensity: 0.5,
 	castShadow: true,
+});
+const heartMaterial = new THREE.MeshStandardMaterial({ // New: Heart material
+    color: 0xff4444, // Bright red
+    emissive: 0xcc2222, // Slight emissive red
+    emissiveIntensity: 0.6,
+    roughness: 0.6,
+    metalness: 0.2,
+    flatShading: true,
 });
 const powerupMaterial = new THREE.MeshStandardMaterial({
 	color: 0xffc107, // Bright Yellow/Orange
@@ -180,6 +192,8 @@ let playerPos = { x: -1, y: -1 };
 let aiPos = { x: -1, y: -1 };
 let playerFuel = INITIAL_FUEL;
 let aiFuel = INITIAL_FUEL;
+let playerHealth = INITIAL_HEALTH; // New
+let aiHealth = INITIAL_HEALTH;     // New
 let powerUpPositions = []; // Array of {x, y} coordinates
 let gamePhase = "playerTurn";
 let currentPlayer = "player";
@@ -192,7 +206,7 @@ let isResolving = false;
 
 // --- Initialization ---
 function init() {
-	console.log("Initializing 3D Missile Game with Fuel Explosions...");
+	console.log("Initializing 3D Missile Game with Health & Fuel Spawning...");
 	initThreeJS();
 	initGameLogic();
 	setupInputListeners();
@@ -301,6 +315,8 @@ function initGameLogic() {
 
 	playerFuel = INITIAL_FUEL;
 	aiFuel = INITIAL_FUEL;
+    playerHealth = INITIAL_HEALTH; // Reset health
+    aiHealth = INITIAL_HEALTH;     // Reset health
 	powerUpPositions = []; // Reset logical positions
 	powerupMeshes = []; // Reset visual meshes
 
@@ -313,12 +329,13 @@ function initGameLogic() {
 	gameOverState = null;
 	isResolving = false;
 
-	createUnits3D();
+	createUnits3D(); // Creates player/ai meshes and their heart indicators
 	spawnInitialPowerups();
 
 	setMessage("Your Turn: Plan your move or missile shot.");
 	updatePhaseIndicator();
 	updateFuelInfo();
+    updateHealthInfo(); // Update health UI
 	enablePlanningControls();
 	clearHighlights();
 	clearPlanningCostUI();
@@ -339,7 +356,7 @@ function setupInputListeners() {
 }
 
 
-// --- Grid Generation Functions --- (Unchanged from previous versions)
+// --- Grid Generation Functions --- (Unchanged)
 function generateGrid() {
     let attempts = 0;
     while (attempts < 10) {
@@ -444,7 +461,8 @@ function findStartPositions() {
     // Try to find a valid floor near a far corner, distant from player
     for (const corner of farCorners) {
         const potentialAiStart = findNearestFloorBFS(corner, playerStart ? [playerStart] : []);
-        if (potentialAiStart && playerStart && distance(playerStart, potentialAiStart) > GRID_SIZE * 0.6) {
+        // Increase required distance slightly
+        if (potentialAiStart && playerStart && distance(playerStart, potentialAiStart) > GRID_SIZE * 0.7) {
             aiStart = potentialAiStart;
             break;
         }
@@ -453,29 +471,53 @@ function findStartPositions() {
     // Fallback: If no distant corner worked, find *any* valid floor far from player
     if (!aiStart && playerStart) {
         console.warn("Could not find a far start position for AI, trying any reachable floor.");
-        aiStart = findNearestFloorBFS({ x: Math.floor(GRID_SIZE / 2), y: Math.floor(GRID_SIZE / 2) }, [playerStart]);
+        let candidateAIStarts = [];
+        // Search from various points far from player if center fails
+        const candidateSearchPoints = [
+             { x: Math.floor(GRID_SIZE / 2), y: Math.floor(GRID_SIZE / 2) },
+             { x: GRID_SIZE - 3, y: GRID_SIZE - 3 },
+             { x: 2, y: GRID_SIZE - 3 },
+             { x: GRID_SIZE - 3, y: 2 }
+        ];
+        for (const sp of candidateSearchPoints){
+             const potentialAi = findNearestFloorBFS(sp, [playerStart]);
+             if(potentialAi && distance(playerStart, potentialAi) > GRID_SIZE * 0.5){
+                 candidateAIStarts.push(potentialAi);
+             }
+        }
+        // Choose the furthest one from the candidates
+        if(candidateAIStarts.length > 0) {
+            candidateAIStarts.sort((a, b) => distance(playerStart, b) - distance(playerStart, a));
+            aiStart = candidateAIStarts[0];
+        } else {
+            // Absolute fallback: find *any* floor not occupied by player
+             aiStart = findNearestFloorBFS({ x: Math.floor(GRID_SIZE / 2), y: Math.floor(GRID_SIZE / 2) }, [playerStart]);
+        }
     }
 
-    if (playerStart && aiStart) {
+    if (playerStart && aiStart && (playerStart.x !== aiStart.x || playerStart.y !== aiStart.y)) {
         console.log(`Player start: ${playerStart.x},${playerStart.y}. AI start: ${aiStart.x},${aiStart.y}`);
         return { player: playerStart, ai: aiStart };
     }
 
     console.error("Failed to find suitable start positions even with fallbacks.");
-    return null;
+    return null; // Indicate failure
 }
 
 function findNearestFloorBFS(startSearchPos, occupied = []) {
     const q = [{ pos: startSearchPos, dist: 0 }];
     const visited = new Set([`${startSearchPos.x},${startSearchPos.y}`]);
-    occupied.forEach(occ => visited.add(`${occ.x},${occ.y}`)); // Mark occupied spots
+    const occupiedSet = new Set(occupied.map(occ => `${occ.x},${occ.y}`)); // Use Set for faster lookup
 
     while (q.length > 0) {
+        // Sort queue to prioritize closer cells (closer to true BFS)
+        q.sort((a, b) => a.dist - b.dist);
         const current = q.shift();
         const { x, y } = current.pos;
+        const currentKey = `${x},${y}`;
 
-        // Check if current position is valid and not occupied
-        if (isValid(x, y) && grid[y][x] === "floor" && !occupied.some(occ => occ.x === x && occ.y === y)) {
+        // Check if current position is valid, floor, and not occupied
+        if (isValid(x, y) && grid[y][x] === "floor" && !occupiedSet.has(currentKey)) {
             return { x, y }; // Found the nearest valid floor
         }
 
@@ -487,13 +529,17 @@ function findNearestFloorBFS(startSearchPos, occupied = []) {
 
         for (const n of neighbors) {
             const key = `${n.x},${n.y}`;
+             // Only add if valid coordinates and not visited yet
             if (isValid(n.x, n.y) && !visited.has(key)) {
                 visited.add(key);
-                q.push({ pos: n, dist: current.dist + 1 });
+                // Check grid type *before* adding to queue if possible
+                if (grid[n.y][n.x] === "floor") {
+                    q.push({ pos: n, dist: current.dist + 1 });
+                }
             }
         }
     }
-    console.warn(`BFS from ${startSearchPos.x},${startSearchPos.y} found no valid floor.`);
+    console.warn(`BFS from ${startSearchPos.x},${startSearchPos.y} found no valid, unoccupied floor.`);
     return null; // No reachable valid floor found
 }
 
@@ -508,63 +554,52 @@ function get3DPosition(x, y, yOffset = 0) {
 function getGridCoords(position) {
 	const x = Math.round(position.x / CELL_3D_SIZE + (GRID_SIZE - 1) / 2);
 	const y = Math.round(position.z / CELL_3D_SIZE + (GRID_SIZE - 1) / 2);
-	// Add small epsilon for robustness near edges if needed, but rounding usually works
-	// const x = Math.round(position.x / CELL_3D_SIZE + (GRID_SIZE - 1) / 2 + 0.01);
-	// const y = Math.round(position.z / CELL_3D_SIZE + (GRID_SIZE - 1) / 2 + 0.01);
 	return { x, y };
 }
 
 function disposeMesh(mesh) {
 	if (!mesh) return;
+    // If it's a group, dispose children first
+    if (mesh.isGroup) {
+        mesh.children.slice().forEach(child => disposeMesh(child)); // Dispose children recursively
+    }
+    // Dispose geometry and material(s)
 	if (mesh.geometry) mesh.geometry.dispose();
 	if (mesh.material) {
 		if (Array.isArray(mesh.material)) {
-			mesh.material.forEach((mat) => mat.dispose());
+			mesh.material.forEach((mat) => {
+                 if (mat.map) mat.map.dispose(); // Dispose textures
+                 mat.dispose();
+             });
 		} else {
-			mesh.material.dispose();
+             if (mesh.material.map) mesh.material.map.dispose(); // Dispose textures
+			 mesh.material.dispose();
 		}
 	}
+    // Remove from parent
 	if (mesh.parent) {
 		mesh.parent.remove(mesh);
 	}
 }
 
-function disposeSprite(sprite) {
-    if (!sprite) return;
-    if (sprite.material?.map) sprite.material.map.dispose();
-    if (sprite.material) sprite.material.dispose();
-    if (sprite.parent) {
-        sprite.parent.remove(sprite);
-    }
-}
-
-
 function clearBoard3D() {
-	// Remove all meshes directly added to gameBoardGroup
+	// Remove all meshes/groups directly added to gameBoardGroup
 	gameBoardGroup.children.slice().forEach(child => {
-        if (child.isMesh) {
-            disposeMesh(child);
-        } else if (child.isSprite) {
-             disposeSprite(child); // Handle sprites like fuel indicators
-        }
+        disposeMesh(child); // Use the enhanced disposeMesh function
     });
+
 	// Clear specific references and arrays
-    disposeSprite(playerFuelIndicator); playerFuelIndicator = null;
-    disposeSprite(aiFuelIndicator); aiFuelIndicator = null;
+    playerHeartsGroup = null; // Ensure groups are cleared
+    aiHeartsGroup = null;
 	floorMeshes = [];
 	wallMeshes = [];
-    powerupMeshes = []; // Clear powerup mesh array too
+    powerupMeshes = [];
 	playerMesh = null;
 	aiMesh = null;
-    activeHighlights.forEach(disposeMesh);
-    activeHighlights = [];
-	// Clear active projectiles/trails (missiles)
+    activeHighlights = []; // Highlights are disposed by disposeMesh via gameBoardGroup
 	activeProjectiles.forEach(proj => {
 		if (proj.mesh) disposeMesh(proj.mesh);
-		if (proj.trail) { // Trails are groups
-            proj.trail.children.forEach(disposeMesh);
-            if(proj.trail.parent) proj.trail.parent.remove(proj.trail);
-        }
+		if (proj.trail) disposeMesh(proj.trail); // Dispose trail group
 	});
 	activeProjectiles = [];
 }
@@ -603,6 +638,58 @@ function createBoard3D() {
 	}
 }
 
+// New: Function to create a single heart geometry
+function createHeartGeometry() {
+    const heartShape = new THREE.Shape();
+    const x = 0, y = 0; // Base position for the shape
+
+    heartShape.moveTo(x, y - 0.2); // Bottom point
+    heartShape.bezierCurveTo(x, y - 0.1, x - 0.3, y + 0.2, x - 0.3, y + 0.2); // Left lower curve
+    heartShape.bezierCurveTo(x - 0.3, y + 0.4, x - 0.1, y + 0.5, x, y + 0.4); // Left upper dip
+    heartShape.bezierCurveTo(x + 0.1, y + 0.5, x + 0.3, y + 0.4, x + 0.3, y + 0.2); // Right upper dip
+    heartShape.bezierCurveTo(x + 0.3, y + 0.2, x, y - 0.1, x, y - 0.2); // Right lower curve
+
+    const extrudeSettings = {
+        steps: 1,
+        depth: 0.15, // Thickness of the heart
+        bevelEnabled: true,
+        bevelThickness: 0.05,
+        bevelSize: 0.04,
+        bevelOffset: 0,
+        bevelSegments: 3,
+    };
+
+    const geometry = new THREE.ExtrudeGeometry(heartShape, extrudeSettings);
+    geometry.center(); // Center the geometry
+    geometry.rotateX(Math.PI); // Flip it upright if needed
+    geometry.scale(CELL_3D_SIZE * 0.3, CELL_3D_SIZE * 0.3, CELL_3D_SIZE * 0.3); // Scale it down
+
+    return geometry;
+}
+
+// Cache heart geometry to avoid recreating it every time
+const cachedHeartGeometry = createHeartGeometry();
+
+// New: Update 3D health indicators (hearts)
+function updateHealthVisuals(health, heartsGroup) {
+    if (!heartsGroup) return;
+
+    // Clear existing hearts
+    heartsGroup.children.slice().forEach(child => disposeMesh(child));
+    heartsGroup.clear(); // Make sure the group itself is empty
+
+    const spacing = CELL_3D_SIZE * 0.3; // Spacing between hearts
+    const totalWidth = (health - 1) * spacing;
+    const startX = -totalWidth / 2;
+
+    for (let i = 0; i < health; i++) {
+        const heartMesh = new THREE.Mesh(cachedHeartGeometry, heartMaterial);
+        heartMesh.position.x = startX + i * spacing;
+        // heartMesh.position.y is relative to the group, which is positioned above the player
+        heartsGroup.add(heartMesh);
+    }
+}
+
 function createUnits3D() {
 	// Player
 	const playerUnitHeight = CELL_3D_SIZE * 0.9;
@@ -610,16 +697,17 @@ function createUnits3D() {
 	const playerGeom = new THREE.CapsuleGeometry(playerUnitRadius, playerUnitHeight - playerUnitRadius * 2, 4, 10);
 	playerMesh = new THREE.Mesh(playerGeom, playerMaterial);
 	playerMesh.castShadow = true;
-	playerMesh.receiveShadow = false; // Units usually don't receive shadows on themselves well
+	playerMesh.receiveShadow = false;
 	const playerPos3D = get3DPosition(playerPos.x, playerPos.y, playerUnitHeight / 2);
 	playerMesh.position.copy(playerPos3D);
 	playerMesh.userData = { type: "player" };
 	gameBoardGroup.add(playerMesh);
 
-	// Player Fuel Indicator
-	playerFuelIndicator = createFuelTextMesh(playerFuel);
-    playerFuelIndicator.position.set(0, playerUnitHeight * 0.6, 0); // Position relative to player mesh center
-    playerMesh.add(playerFuelIndicator); // Add as child
+    // Player Health Indicator Group
+    playerHeartsGroup = new THREE.Group();
+    playerHeartsGroup.position.set(0, playerUnitHeight * 0.8, 0); // Position above player mesh center
+    playerMesh.add(playerHeartsGroup); // Add as child
+    updateHealthVisuals(playerHealth, playerHeartsGroup); // Initial draw
 
 	// AI
 	const aiUnitHeight = CELL_3D_SIZE * 1.0;
@@ -633,75 +721,11 @@ function createUnits3D() {
 	aiMesh.userData = { type: "ai" };
 	gameBoardGroup.add(aiMesh);
 
-    // AI Fuel Indicator
-    aiFuelIndicator = createFuelTextMesh(aiFuel);
-    aiFuelIndicator.position.set(0, aiUnitHeight * 0.6, 0); // Position relative to AI mesh center
-    aiMesh.add(aiFuelIndicator); // Add as child
-
-	updateFuelVisuals(); // Initial update
-}
-
-function createFuelTextMesh(fuel) {
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    const size = 128; // Texture resolution
-    const halfSize = size / 2;
-    canvas.width = size;
-    canvas.height = size;
-
-    // Background bubble
-    context.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Semi-transparent black background
-    context.beginPath();
-    context.roundRect(0, 0, size, size, size * 0.15); // Rounded rectangle
-    context.fill();
-
-    // Text
-    context.font = `Bold ${size * 0.6}px Arial`; // Large, bold text
-    context.fillStyle = 'white';
-    context.textAlign = 'center';
-    context.textBaseline = 'middle';
-    context.fillText(fuel.toString(), halfSize, halfSize + size * 0.02); // Adjust vertical alignment slightly
-
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.needsUpdate = true;
-    texture.colorSpace = THREE.SRGBColorSpace; // Important for color accuracy
-
-    const spriteMaterial = new THREE.SpriteMaterial({
-        map: texture,
-        sizeAttenuation: false, // Keep size constant regardless of distance
-        depthTest: false, // Render on top
-    });
-
-    const sprite = new THREE.Sprite(spriteMaterial);
-    sprite.scale.set(0.1, 0.1, 1); // Scale down the sprite
-    return sprite;
-}
-
-
-function updateFuelVisuals() {
-	// Update Player Fuel Indicator
-    if (playerMesh && playerFuelIndicator) {
-        playerMesh.remove(playerFuelIndicator); // Remove old one
-        disposeSprite(playerFuelIndicator);
-        playerFuelIndicator = createFuelTextMesh(playerFuel);
-        const playerUnitHeight = CELL_3D_SIZE * 0.9;
-        playerFuelIndicator.position.set(0, playerUnitHeight * 0.6, 0);
-        playerMesh.add(playerFuelIndicator);
-        // Optional: Adjust player emissive intensity based on fuel
-        playerMesh.material.emissiveIntensity = 0.5 + playerFuel / 50;
-    }
-
-    // Update AI Fuel Indicator
-    if (aiMesh && aiFuelIndicator) {
-        aiMesh.remove(aiFuelIndicator); // Remove old one
-        disposeSprite(aiFuelIndicator);
-        aiFuelIndicator = createFuelTextMesh(aiFuel);
-        const aiUnitHeight = CELL_3D_SIZE * 1.0;
-        aiFuelIndicator.position.set(0, aiUnitHeight * 0.6, 0);
-        aiMesh.add(aiFuelIndicator);
-        // Optional: Adjust AI emissive intensity based on fuel
-        aiMesh.material.emissiveIntensity = 0.5 + aiFuel / 50;
-    }
+    // AI Health Indicator Group
+    aiHeartsGroup = new THREE.Group();
+    aiHeartsGroup.position.set(0, aiUnitHeight * 0.8, 0); // Position above AI mesh center
+    aiMesh.add(aiHeartsGroup); // Add as child
+    updateHealthVisuals(aiHealth, aiHeartsGroup); // Initial draw
 }
 
 function createPowerup3D(x, y) {
@@ -740,7 +764,7 @@ function removePowerup3D(x, y) {
 }
 
 
-// --- Highlighting Functions ---
+// --- Highlighting Functions --- (Unchanged, use the existing correct version)
 function clearHighlights() {
 	activeHighlights.forEach(mesh => {
 		disposeMesh(mesh);
@@ -825,17 +849,7 @@ function renderHighlights() {
 }
 
 
-// --- ====================================== ---
-// --- NEW: Guided Missile Visual Function ---
-// --- ====================================== ---
-
-/**
- * Creates the guided missile animation: launch, travel with trail, and calls back on impact.
- * Does NOT create the explosion effect itself, that's handled by the caller based on target type.
- * @param {Array<object>} path Array of {x, y} grid coordinates.
- * @param {THREE.Material} missileCoreMaterial The base material for the missile body.
- * @param {Function} [onImpactCallback] Optional callback when the missile visually reaches the target position.
- */
+// --- Missile / Explosion Visual Functions --- (Unchanged)
 function createGuidedMissileVisual(path, missileCoreMaterial, onImpactCallback = null) {
 	if (!path || path.length < 2) return;
 
@@ -932,10 +946,9 @@ function createGuidedMissileVisual(path, missileCoreMaterial, onImpactCallback =
 			// Clean up trail group after a short delay
 			setTimeout(() => {
 				scene.remove(trailGroup);
-				trailGroup.children.forEach(disposeMesh); // Dispose any remaining particles
+                disposeMesh(trailGroup); // Use disposeMesh for the group
                 let trailIndex = activeProjectiles.findIndex(p => p.trail === trailGroup);
                 if (trailIndex > -1) activeProjectiles.splice(trailIndex, 1);
-
 			}, trailParticleLifetime);
 
              // Call the impact callback signalling visual arrival
@@ -946,16 +959,6 @@ function createGuidedMissileVisual(path, missileCoreMaterial, onImpactCallback =
 		.start();
 }
 
-
-/**
- * Creates a visual explosion effect at a given position with optional enhancements.
- * Manages its own cleanup via tweens and calls a callback when fully finished.
- * @param {THREE.Vector3} position World position for the explosion center.
- * @param {THREE.Color} baseColor Color hint for the explosion.
- * @param {number} [scaleMultiplier=1.0] Multiplier for the size and duration.
- * @param {number} [particleMultiplier=1.0] Multiplier for the number of particles.
- * @param {Function} [onCompleteCallback=null] Callback when the effect finishes visually.
- */
 function createExplosionEffect(position, baseColor, scaleMultiplier = 1.0, particleMultiplier = 1.0, onCompleteCallback = null) {
     const explosionGroup = new THREE.Group();
     scene.add(explosionGroup);
@@ -967,17 +970,21 @@ function createExplosionEffect(position, baseColor, scaleMultiplier = 1.0, parti
     const baseDuration = EXPLOSION_DURATION; // Use the constant
     const effectDuration = baseDuration * scaleMultiplier; // Scale duration with size
 
+    let shockwaveMesh, particleSystem, flashLight; // Declare meshes/light here
+
     let completedComponents = 0;
     const totalVisualComponents = 3; // shockwave, particles, light
 
     const checkCleanup = () => {
         completedComponents++;
         if (completedComponents >= totalVisualComponents) {
-            // Cleanup internal meshes/lights
-            scene.remove(explosionGroup); // Remove parent group
+            // Cleanup internal meshes/lights before removing group
             disposeMesh(shockwaveMesh);
-            disposeMesh(particleSystem); // Disposes geom and mat
-            scene.remove(flashLight); // Light removed directly
+            disposeMesh(particleSystem);
+            if (flashLight && flashLight.parent) flashLight.parent.remove(flashLight); // Light removed directly
+
+            // Remove parent group AFTER components are potentially disposed
+            if (explosionGroup.parent) explosionGroup.parent.remove(explosionGroup);
 
             // Signal overall completion
             if (onCompleteCallback) {
@@ -990,7 +997,7 @@ function createExplosionEffect(position, baseColor, scaleMultiplier = 1.0, parti
     const shockwaveGeom = new THREE.SphereGeometry(explosionScale * 0.1, 32, 16); // Start small
     const shockwaveMat = explosionShockwaveMaterial.clone();
     shockwaveMat.color.set(baseColor).lerp(new THREE.Color(0xffffff), 0.7);
-    const shockwaveMesh = new THREE.Mesh(shockwaveGeom, shockwaveMat);
+    shockwaveMesh = new THREE.Mesh(shockwaveGeom, shockwaveMat);
     shockwaveMesh.position.copy(position);
     explosionGroup.add(shockwaveMesh);
 
@@ -1035,7 +1042,7 @@ function createExplosionEffect(position, baseColor, scaleMultiplier = 1.0, parti
     const particleMat = explosionParticleMaterial.clone();
     particleMat.size = 0.3 * scaleMultiplier; // Adjust base size with scale
 
-    const particleSystem = new THREE.Points(particleGeom, particleMat);
+    particleSystem = new THREE.Points(particleGeom, particleMat);
     particleSystem.position.copy(position);
     explosionGroup.add(particleSystem);
 
@@ -1057,16 +1064,18 @@ function createExplosionEffect(position, baseColor, scaleMultiplier = 1.0, parti
                 currentColor.lerp(targetColor, colorProgress * 0.8);
                 colAttr.setXYZ(i, currentColor.r, currentColor.g, currentColor.b);
             }
-            particleSystem.material.size = obj.sizeFactor * 0.3 * scaleMultiplier; // Update size dynamically
-            particleSystem.material.opacity = obj.opacity;
-            posAttr.needsUpdate = true;
-            colAttr.needsUpdate = true;
+            if (particleSystem.material) { // Check if material still exists
+                 particleSystem.material.size = obj.sizeFactor * 0.3 * scaleMultiplier; // Update size dynamically
+                 particleSystem.material.opacity = obj.opacity;
+            }
+            if(posAttr) posAttr.needsUpdate = true;
+            if(colAttr) colAttr.needsUpdate = true;
         })
         .onComplete(checkCleanup) // Particle system completion triggers cleanup check
         .start();
 
     // --- 3. Light Flash ---
-    const flashLight = new THREE.PointLight(
+    flashLight = new THREE.PointLight(
         baseColor.clone().lerp(new THREE.Color(0xffffff), 0.8), // Bright whiteish flash color
         15.0 * scaleMultiplier, // Intensity scales with size
         explosionScale * 2.5, // Range scales
@@ -1081,10 +1090,6 @@ function createExplosionEffect(position, baseColor, scaleMultiplier = 1.0, parti
         .onComplete(checkCleanup) // Light completion triggers cleanup check
         .start();
 }
-
-// --- ====================================== ---
-// --- END: Missile/Explosion Visuals ---
-// --- ====================================== ---
 
 
 // --- Animation Loop ---
@@ -1101,11 +1106,16 @@ function animate(time) {
 		}
 	});
 
+    // Animate heart rotation (optional subtle effect)
+    const heartSpinSpeed = 0.005;
+    if (playerHeartsGroup) playerHeartsGroup.rotation.y += heartSpinSpeed;
+    if (aiHeartsGroup) aiHeartsGroup.rotation.y -= heartSpinSpeed;
+
 	// Render scene with post-processing
 	composer.render();
 }
 
-// --- Input Handling Functions ---
+// --- Input Handling Functions --- (Unchanged)
 function handleCanvasMouseMove(event) {
 	if (currentPlayer !== "player" || isResolving || gameOverState || currentPlanningMode !== "shoot") {
         // If not in correct state to plan shot, clear any existing path preview
@@ -1234,8 +1244,17 @@ function updatePhaseIndicator() {
 function updateFuelInfo() {
 	playerFuelInfo.textContent = `Your Fuel: ${playerFuel}`;
 	aiFuelInfo.textContent = `AI Fuel: ${aiFuel}`;
-    updateFuelVisuals(); // Update the 3D text indicators
 }
+
+// New: Update Health UI
+function updateHealthInfo() {
+    playerHealthInfo.textContent = `Your Health: ${playerHealth} / ${INITIAL_HEALTH}`;
+	aiHealthInfo.textContent = `AI Health: ${aiHealth} / ${INITIAL_HEALTH}`;
+    // Update 3D visuals as well
+    updateHealthVisuals(playerHealth, playerHeartsGroup);
+    updateHealthVisuals(aiHealth, aiHeartsGroup);
+}
+
 
 function updatePlanningCostUI(cost, available) {
     if (cost > 0) {
@@ -1272,7 +1291,7 @@ function disablePlanningControls() {
 }
 
 
-// --- Planning Phase Logic Functions (Player Only) ---
+// --- Planning Phase Logic Functions (Player Only) --- (Unchanged)
 function setPlanningMode(mode) {
 	if (currentPlayer !== "player" || isResolving || gameOverState) return;
 
@@ -1313,7 +1332,7 @@ function handleMoveInput(targetX, targetY) {
 }
 
 
-// --- Pathfinding Logic (UCS with Turn Cost) ---
+// --- Pathfinding Logic (UCS with Turn Cost) --- (Unchanged)
 function findShortestPathWithTurnCost(startPos, targetPos, opponentBlockers = []) {
     const priorityQueue = []; // Stores [cost, state]
     const startState = {
@@ -1330,6 +1349,12 @@ function findShortestPathWithTurnCost(startPos, targetPos, opponentBlockers = []
     const startVisitedKey = `${startPos.x},${startPos.y},9,9`;
     visited.add(startVisitedKey);
 
+    // Map to store the minimum cost found so far to reach a cell (independent of arrival dir)
+    // Key: 'x,y', Value: cost
+    const minCostToCell = {};
+    minCostToCell[`${startPos.x},${startPos.y}`] = 0;
+
+
     // Set of blocker positions (opponents) for quick lookup
     const blockerSet = new Set(opponentBlockers.map(p => `${p.x},${p.y}`));
 
@@ -1337,6 +1362,12 @@ function findShortestPathWithTurnCost(startPos, targetPos, opponentBlockers = []
         // Get state with the lowest cost (Priority Queue behavior)
         priorityQueue.sort((a, b) => a[0] - b[0]);
         const [currentCost, currentState] = priorityQueue.shift();
+
+        // Pruning: If we found a cheaper way to reach this cell already, skip
+        const currentCellKey = `${currentState.pos.x},${currentState.pos.y}`;
+        if (currentCost > (minCostToCell[currentCellKey] ?? Infinity)) {
+            continue;
+        }
 
         // Goal check
         if (currentState.pos.x === targetPos.x && currentState.pos.y === targetPos.y) {
@@ -1376,20 +1407,26 @@ function findShortestPathWithTurnCost(startPos, targetPos, opponentBlockers = []
             }
             const newCost = currentCost + BASE_MOVE_COST + turnPenaltyCost;
 
-            // Check if we've visited this state (position + arrival direction) before with a lower cost
-            const visitedKey = `${neighborPos.x},${neighborPos.y},${moveDir.dx},${moveDir.dy}`;
-            // Note: UCS inherently handles finding lower costs, but the visited check prevents cycles and redundant exploration *with the same arrival direction*.
-             if (!visited.has(visitedKey)) { // Only proceed if this state hasn't been visited via this direction
-                 visited.add(visitedKey);
-                 const newPath = [...currentState.path, neighborPos];
-                 const newState = {
-                     pos: neighborPos,
-                     path: newPath,
-                     cost: newCost,
-                     arrivalDir: moveDir // Store the direction used to reach this neighbor
-                 };
-                 priorityQueue.push([newCost, newState]); // Add to queue with its cost
-             }
+            // Check if we've found a cheaper path to this neighbor cell overall
+            const neighborCellKey = `${neighborPos.x},${neighborPos.y}`;
+            if (newCost < (minCostToCell[neighborCellKey] ?? Infinity)) {
+                // Found a new best path to this cell
+                 minCostToCell[neighborCellKey] = newCost;
+
+                 // Check visited state *including direction* to prevent cycles with same arrival direction
+                 const visitedKey = `${neighborPos.x},${neighborPos.y},${moveDir.dx},${moveDir.dy}`;
+                 if (!visited.has(visitedKey)) { // Only proceed if this state hasn't been visited via this direction
+                     visited.add(visitedKey);
+                     const newPath = [...currentState.path, neighborPos];
+                     const newState = {
+                         pos: neighborPos,
+                         path: newPath,
+                         cost: newCost,
+                         arrivalDir: moveDir // Store the direction used to reach this neighbor
+                     };
+                     priorityQueue.push([newCost, newState]); // Add to queue with its cost
+                 }
+            }
         }
     }
 
@@ -1397,47 +1434,64 @@ function findShortestPathWithTurnCost(startPos, targetPos, opponentBlockers = []
 }
 
 
-// --- AI Logic ---
+// --- AI Logic --- (Modified to consider health for shooting)
 function findBestActionUCSBased() {
-    console.log("AI using rule-based logic with UCS Turn Cost pathing...");
+    console.log("AI considering health. Logic with UCS Turn Cost pathing...");
     const startTime = performance.now();
 
-    // 1. Check for Winning Shot using UCS Turn Cost pathing
-    const shootPathResult = findShortestPathWithTurnCost(aiPos, playerPos, []); // AI path to player
-    let canShoot = false;
-    let winningShotAction = null;
+    // 1. Check for Lethal Shot (can win the game this turn)
+    let lethalShotAction = null;
+    if (playerHealth <= 1) { // If player has 1 health, any hit is lethal
+        const shootPathResult = findShortestPathWithTurnCost(aiPos, playerPos, []); // AI path to player
+        if (shootPathResult) {
+            const fuelCost = shootPathResult.cost;
+            if (fuelCost <= aiFuel) {
+                lethalShotAction = {
+                    type: "shoot",
+                    target: playerPos,
+                    _path: shootPathResult.path,
+                    _cost: fuelCost
+                };
+                console.log(`AI Decision: Lethal Shot Found. Cost: ${fuelCost}, Available Fuel: ${aiFuel}.`);
+                 const endTime = performance.now();
+                 console.log(`AI decision took ${(endTime - startTime).toFixed(2)} ms.`);
+                 return lethalShotAction; // TAKE THE WINNING SHOT!
+            } else {
+                console.log(`AI found lethal path (Cost: ${fuelCost}) but lacks fuel (${aiFuel}).`);
+            }
+        } else {
+             console.log("AI: No path found for lethal shot.");
+        }
+    }
 
+    // 2. If no lethal shot, check for any possible shot (even non-lethal)
+    let possibleShotAction = null;
+    const shootPathResult = findShortestPathWithTurnCost(aiPos, playerPos, []);
     if (shootPathResult) {
         const fuelCost = shootPathResult.cost;
         if (fuelCost <= aiFuel) {
-            canShoot = true;
-            winningShotAction = {
+            possibleShotAction = {
                 type: "shoot",
-                target: playerPos, // Target the player's current position
+                target: playerPos,
                 _path: shootPathResult.path,
                 _cost: fuelCost
             };
-            console.log(`AI Decision: Winning Shot Found. Path Length: ${shootPathResult.path.length}, Cost: ${fuelCost}, Available Fuel: ${aiFuel}.`);
+            console.log(`AI Decision: Non-lethal Shot Possible. Cost: ${fuelCost}, Available Fuel: ${aiFuel}.`);
+            // Don't return yet, consider fuel collection first unless fuel is high
         } else {
-            console.log(`AI found path to player (Cost: ${fuelCost}) but lacks fuel (${aiFuel}).`);
+             console.log(`AI found path to player (Cost: ${fuelCost}) but lacks fuel (${aiFuel}).`);
         }
     } else {
         console.log("AI: No path found to player.");
     }
 
-    // If a winning shot is possible, take it!
-    if (canShoot) {
-        const endTime = performance.now();
-        console.log(`AI decision took ${(endTime - startTime).toFixed(2)} ms.`);
-        return winningShotAction;
-    }
 
-    // 2. If no winning shot, find the nearest reachable fuel cell (using simple BFS for movement)
+    // 3. Find the nearest reachable fuel cell (using simple BFS for movement)
     const availableUpgrades = [...powerUpPositions];
     let shortestMovePathToUpgrade = null;
     let bestTargetUpgrade = null;
 
-    // Sort upgrades by distance to potentially check closer ones first (minor optimization)
+    // Sort upgrades by distance to potentially check closer ones first
     availableUpgrades.sort((a, b) => distance(aiPos, a) - distance(aiPos, b));
 
     for (const upgradePos of availableUpgrades) {
@@ -1452,23 +1506,43 @@ function findBestActionUCSBased() {
         }
     }
 
-    // If a path to an upgrade was found, move towards it
-    if (shortestMovePathToUpgrade) {
-        const nextStep = shortestMovePathToUpgrade[1]; // The next cell in the path
+    // --- AI Decision Logic ---
+    // Prioritize lethal shot (handled above)
+    // If fuel is low OR no shot possible, prioritize collecting fuel
+    if (shortestMovePathToUpgrade && (aiFuel < 5 || !possibleShotAction || aiFuel < (possibleShotAction?._cost ?? Infinity) + FUEL_PER_UPGRADE)) { // Be more eager for fuel if low or can't afford shot + next fuel
+        const nextStep = shortestMovePathToUpgrade[1];
         console.log(`AI Decision: Moving towards fuel cell at ${bestTargetUpgrade.x},${bestTargetUpgrade.y}. Next step: ${nextStep.x},${nextStep.y}`);
         const endTime = performance.now();
         console.log(`AI decision took ${(endTime - startTime).toFixed(2)} ms.`);
         return { type: "move", target: nextStep };
     }
 
-    // 3. If no winning shot and no reachable fuel cells, stay put
-    console.log("AI Decision: No winning shot or reachable fuel cells. Staying put.");
+    // If a shot is possible and fuel is decent, take the shot
+    if (possibleShotAction) {
+        console.log(`AI Decision: Taking available shot.`);
+        const endTime = performance.now();
+        console.log(`AI decision took ${(endTime - startTime).toFixed(2)} ms.`);
+        return possibleShotAction;
+    }
+
+     // If couldn't shoot and couldn't move to fuel, move towards nearest fuel anyway (if path exists)
+     if (shortestMovePathToUpgrade) {
+        const nextStep = shortestMovePathToUpgrade[1];
+        console.log(`AI Decision (Fallback): Moving towards fuel cell at ${bestTargetUpgrade.x},${bestTargetUpgrade.y}. Next step: ${nextStep.x},${nextStep.y}`);
+        const endTime = performance.now();
+        console.log(`AI decision took ${(endTime - startTime).toFixed(2)} ms.`);
+        return { type: "move", target: nextStep };
+    }
+
+
+    // 4. If nothing else, stay put
+    console.log("AI Decision: No viable shots or fuel moves. Staying put.");
     const endTime = performance.now();
     console.log(`AI decision took ${(endTime - startTime).toFixed(2)} ms.`);
     return { type: "stay" }; // Default action if nothing else is viable
 }
 
-// Simple BFS for basic reachability (used by AI for non-critical movement like grabbing fuel)
+// Simple BFS for basic reachability (Unchanged)
 function findShortestPath_SimpleBFS(startPos, targetPos, opponentBlockers = []) {
     const q = [{ pos: startPos, path: [startPos] }];
     const visited = new Set([`${startPos.x},${startPos.y}`]);
@@ -1495,7 +1569,7 @@ function findShortestPath_SimpleBFS(startPos, targetPos, opponentBlockers = []) 
 }
 
 
-// --- AI Trigger ---
+// --- AI Trigger --- (Unchanged)
 function triggerAiTurn() {
 	setMessage("AI is thinking...");
 	updatePhaseIndicator();
@@ -1520,12 +1594,12 @@ function triggerAiTurn() {
 
 
 // --- ====================================== ---
-// --- Action Execution & Turn Management ---
+// --- Action Execution & Turn Management --- (MODIFIED FOR HEALTH)
 // --- ====================================== ---
 
 /**
  * Executes the planned action for the current player.
- * Handles movement, shooting (normal and fuel cell), and game state updates.
+ * Handles movement, shooting (normal and fuel cell), health updates, and game state updates.
  * @param {object} action - The action object { type, target, _path?, _cost? }
  */
 async function executeAction(action) {
@@ -1538,6 +1612,7 @@ async function executeAction(action) {
 
 	let actionSuccess = true;
 	let wasHit = false; // Did the action result in hitting the opponent?
+    let hitPlayer = null; // Which player was hit ('player' or 'ai')?
 	let collectedPowerup = false; // Did the action involve collecting fuel?
 	let messageLog = []; // Collect messages for final display
 
@@ -1545,6 +1620,8 @@ async function executeAction(action) {
 	const activePlayerMesh = activePlayer === "player" ? playerMesh : aiMesh;
 	const activePlayerPosRef = activePlayer === "player" ? playerPos : aiPos;
 	const opponentPos = activePlayer === "player" ? aiPos : playerPos;
+    const opponentHealthRef = activePlayer === "player" ? "aiHealth" : "playerHealth"; // String key for health update
+    const opponentHeartsGroup = activePlayer === 'player' ? aiHeartsGroup : playerHeartsGroup;
 	const missileCoreMaterial = activePlayer === "player" ? playerMissileCoreMaterial : aiMissileCoreMaterial;
 
 	// --- Process Action ---
@@ -1573,7 +1650,7 @@ async function executeAction(action) {
 					aiFuel += FUEL_PER_UPGRADE;
 					messageLog.push(`AI collected fuel cell! (+${FUEL_PER_UPGRADE} Fuel, Total: ${aiFuel})`);
 				}
-				updateFuelInfo(); // Update UI and 3D text
+				updateFuelInfo(); // Update UI
 			}
 		}
 
@@ -1594,16 +1671,14 @@ async function executeAction(action) {
             let explosionCompletePromise = null; // Promise for the explosion visual
 
             // --- Missile Visual ---
-            // Create a promise that resolves when the missile visually impacts
             const missileVisualPromise = new Promise(resolveMissileImpact => {
                 createGuidedMissileVisual(path, missileCoreMaterial, () => {
-                    impactOccurred = true; // Set flag when impact callback is called
-                    resolveMissileImpact(); // Resolve the promise
+                    impactOccurred = true;
+                    resolveMissileImpact();
                 });
             });
             messageLog.push(`${activePlayer.toUpperCase()} missile launched (Cost: ${cost}).`);
 
-            // --- Wait for Visual Impact ---
             await missileVisualPromise; // Wait until the missile visually reaches the target
 
             // --- Handle Impact Logic ---
@@ -1613,78 +1688,87 @@ async function executeAction(action) {
             if (isPowerupAt(targetX, targetY)) {
                 // --- FUEL CELL EXPLOSION ---
                 messageLog.push(`Missile hit a fuel cell at ${targetX},${targetY}!`);
-                setMessage(messageLog.join(" ")); // Update message early for responsiveness
+                setMessage(messageLog.join(" "));
 
-                // Trigger the chain reaction logic (handles visuals and removal)
-                // This function returns a promise that resolves when the *entire chain* is done
                 explosionCompletePromise = triggerFuelChainExplosion(targetX, targetY);
-
-                // Get the results after the chain completes
                 const destroyedCoords = await explosionCompletePromise;
-
                 if (destroyedCoords.length > 0) {
                     messageLog.push(`Chain reaction destroyed ${destroyedCoords.length} fuel cell(s).`);
-                } else {
-                    messageLog.push(`Fuel cell at ${targetX},${targetY} might have already been destroyed.`);
                 }
-                // Fuel explosions do not damage players directly
-                wasHit = false;
+                wasHit = false; // Fuel explosions don't hurt players directly
 
             } else {
                 // --- NORMAL IMPACT (Floor or Opponent) ---
-                const impactPosition3D = get3DPosition(targetX, targetY, CELL_3D_SIZE * 0.3); // Impact near floor
-
-                // Create a promise specifically for the normal explosion visual effect
+                const impactPosition3D = get3DPosition(targetX, targetY, CELL_3D_SIZE * 0.3);
                 explosionCompletePromise = new Promise(resolveExplosion => {
-                    // Trigger standard explosion, passing resolveExplosion as the completion callback
                     createExplosionEffect(impactPosition3D, missileCoreMaterial.color, 1.0, 1.0, resolveExplosion);
                 });
 
                 // Check if opponent was hit
                 if (targetX === opponentPos.x && targetY === opponentPos.y) {
                     wasHit = true; // Mark hit for game logic
-                    messageLog.push(`${activePlayer === "player" ? "AI" : "Player"} was hit!`);
+                    hitPlayer = activePlayer === "player" ? "ai" : "player"; // The opponent was hit
+                    messageLog.push(`${hitPlayer.toUpperCase()} was hit!`);
                 } else {
                     messageLog.push(`Missile impacted floor at ${targetX},${targetY}.`);
                 }
-
-                // Wait for the normal explosion visual to finish
-                await explosionCompletePromise;
+                await explosionCompletePromise; // Wait for normal explosion visual
             }
 
-            // Ensure fuel info is updated after potential removals by explosion
-            updateFuelInfo();
+            updateFuelInfo(); // Ensure fuel info updated after potential removals
 
 		} else {
-			// Not enough fuel or invalid path
 			messageLog.push(`${activePlayer.toUpperCase()} missile fizzled! (Check fuel/path).`);
 			actionSuccess = false;
 			wasHit = false;
-			await wait(ACTION_RESOLVE_DELAY); // Wait even if fizzled
+			await wait(ACTION_RESOLVE_DELAY);
 		}
 
 	} else if (action.type === "stay") {
 		setMessage(`${activePlayer.toUpperCase()} stays put.`);
 		messageLog.push(`${activePlayer.toUpperCase()} did not move.`);
-		await wait(ACTION_RESOLVE_DELAY); // Standard wait for doing nothing
+		await wait(ACTION_RESOLVE_DELAY);
 	}
 
-	// --- Post-Action Resolution ---
-	setMessage(messageLog.join(" ")); // Update message area with collected logs
+	// --- Post-Action Resolution (Health Update & Game End Check) ---
 
-	// Check game end condition AFTER visuals/logic are complete
-	if (wasHit) {
-		endGame(`${activePlayer.toUpperCase()} Wins!`, activePlayer);
-		return; // Stop further turn progression
-	}
+    // Apply damage if a hit occurred
+	if (wasHit && hitPlayer) {
+        if (hitPlayer === 'player') {
+            playerHealth--;
+             messageLog.push(`Player health reduced to ${playerHealth}.`);
+        } else { // hitPlayer === 'ai'
+            aiHealth--;
+             messageLog.push(`AI health reduced to ${aiHealth}.`);
+        }
+        updateHealthInfo(); // Update UI and 3D visuals immediately
 
-	// If game not over, proceed to next turn
+        // Check for game over AFTER health update
+        if (playerHealth <= 0) {
+            setMessage(messageLog.join(" ")); // Show final messages before ending
+            endGame("AI Wins! Player eliminated.", "ai");
+            return; // Stop further turn progression
+        } else if (aiHealth <= 0) {
+             setMessage(messageLog.join(" ")); // Show final messages before ending
+            endGame("Player Wins! AI eliminated.", "player");
+            return; // Stop further turn progression
+        }
+    }
+
+	// --- Turn Transition & Ongoing Fuel Spawn ---
+	setMessage(messageLog.join(" ")); // Update message area with all logs for the turn
+
 	if (!gameOverState) {
+        const previousPlayer = activePlayer;
 		currentPlayer = activePlayer === "player" ? "ai" : "player";
 		gamePhase = currentPlayer + "Turn";
 		isResolving = false; // Allow next action
 
-		// Short delay before AI thinks or player controls are enabled
+		// Spawn a powerup after AI finishes its turn (if conditions met)
+        if (previousPlayer === 'ai') {
+            spawnRandomPowerup(); // Attempt to spawn a new fuel cell
+        }
+
 		await wait(ACTION_RESOLVE_DELAY / 2);
 
 		if (currentPlayer === "ai") {
@@ -1693,25 +1777,14 @@ async function executeAction(action) {
 			setMessage("Your Turn: Plan your action.");
 			updatePhaseIndicator();
 			enablePlanningControls();
-			setPlanningMode("move"); // Default back to move planning for player
+			setPlanningMode("move"); // Default back to move planning
 		}
 	} else {
-		isResolving = false; // Ensure resolving is false even if game ended during action
+		isResolving = false; // Ensure resolving is false if game ended
 	}
 }
 
-// --- ====================================== ---
-// --- NEW: Fuel Cell Explosion Logic ---
-// --- ====================================== ---
-
-/**
- * Handles the explosion of a fuel cell, including chain reactions and radius destruction.
- * Triggers visual effects and removes destroyed powerups.
- * Returns a promise that resolves when all visual effects and removals are complete.
- * @param {number} startX - Grid X coordinate of the initially hit fuel cell.
- * @param {number} startY - Grid Y coordinate of the initially hit fuel cell.
- * @returns {Promise<Array<object>>} A promise that resolves with an array of {x, y} coordinates of all destroyed fuel cells.
- */
+// --- Fuel Cell Explosion Logic --- (Unchanged)
 async function triggerFuelChainExplosion(startX, startY) {
     console.log(`Starting fuel chain reaction at ${startX},${startY}`);
     const explosionQueue = [{ x: startX, y: startY }]; // Cells that will explode
@@ -1723,78 +1796,60 @@ async function triggerFuelChainExplosion(startX, startY) {
         const { x: currentX, y: currentY } = explosionQueue.shift();
         const currentKey = `${currentX},${currentY}`;
 
-        // Double-check if the cell still exists logically (might have been added to destruction set already)
-        // And ensure we haven't already processed its explosion trigger fully
          if (!isPowerupAt(currentX, currentY) || destroyedThisTurn.has(currentKey) ) {
-              // console.log(`Skipping explosion at ${currentX},${currentY} - already destroyed or processed.`);
-              continue; // Already destroyed or processed
+              continue;
          }
 
-        // 1. Mark the exploding cell itself for destruction
         console.log(` Fuel cell at ${currentX},${currentY} explodes!`);
         destroyedThisTurn.add(currentKey);
 
-        // 2. Trigger its visual effect (make it prominent)
-        const pos3D = get3DPosition(currentX, currentY, CELL_3D_SIZE * 0.3); // Explosion center near ground
+        const pos3D = get3DPosition(currentX, currentY, CELL_3D_SIZE * 0.3);
         const visualPromise = new Promise(resolve => {
             createExplosionEffect(
                 pos3D,
-                powerupMaterial.color, // Use powerup color as base
+                powerupMaterial.color,
                 FUEL_EXPLOSION_SCALE_MULTIPLIER,
                 FUEL_EXPLOSION_PARTICLE_MULTIPLIER,
-                resolve // Pass the resolve function as the onCompleteCallback
+                resolve
             );
         });
         visualCompletionPromises.push(visualPromise);
 
-
-        // 3. Check radius for destruction (Mechanic #1: Explosive Fuel Cells)
         for (let dx = -FUEL_EXPLOSION_RADIUS; dx <= FUEL_EXPLOSION_RADIUS; dx++) {
             for (let dy = -FUEL_EXPLOSION_RADIUS; dy <= FUEL_EXPLOSION_RADIUS; dy++) {
                 if (Math.abs(dx) + Math.abs(dy) > FUEL_EXPLOSION_RADIUS || (dx === 0 && dy === 0)) {
-                    continue; // Skip self and outside Manhattan radius
+                    continue;
                 }
                 const nearbyX = currentX + dx;
                 const nearbyY = currentY + dy;
                 const nearbyKey = `${nearbyX},${nearbyY}`;
 
-                // If a valid powerup exists nearby and hasn't already been marked for destruction
                 if (isValid(nearbyX, nearbyY) && isPowerupAt(nearbyX, nearbyY) && !destroyedThisTurn.has(nearbyKey)) {
-                    // console.log(`  Blast radius from ${currentX},${currentY} marks ${nearbyX},${nearbyY} for destruction.`);
-                    destroyedThisTurn.add(nearbyKey); // Mark for destruction by the blast
+                    destroyedThisTurn.add(nearbyKey);
                 }
             }
         }
 
-        // 4. Check adjacent for chaining (Mechanic #2: Volatile Fuel)
         const directions = [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }];
         for (const dir of directions) {
             const adjX = currentX + dir.dx;
             const adjY = currentY + dir.dy;
             const adjKey = `${adjX},${adjY}`;
 
-            // If adjacent cell is valid, has a powerup, AND hasn't started its own explosion chain yet
             if (isValid(adjX, adjY) && isPowerupAt(adjX, adjY) && !explodedThisTurn.has(adjKey)) {
-                 // console.log(`  Chain reaction from ${currentX},${currentY} triggers explosion at ${adjX},${adjY}`);
-                 explodedThisTurn.add(adjKey); // Mark as processed for *triggering* an explosion
-                 explosionQueue.push({ x: adjX, y: adjY }); // Add to queue to explode next
+                 explodedThisTurn.add(adjKey);
+                 explosionQueue.push({ x: adjX, y: adjY });
             }
         }
-        // Optional small delay between processing each explosion step for visual pacing
-        // await wait(50);
     }
 
-    // Wait for ALL triggered explosion visual effects to fully complete their animations and cleanup.
     await Promise.all(visualCompletionPromises);
     console.log("All fuel explosion visuals complete.");
 
-    // 5. Perform actual logical and 3D removal *after* all visuals are done.
     const destroyedCoordsList = [];
     destroyedThisTurn.forEach(key => {
         const [x, y] = key.split(',').map(Number);
-        // Final check: ensure it *still* exists logically before removing
         if (isPowerupAt(x, y)) {
-             // console.log(`Removing destroyed fuel cell at ${x},${y}`);
              removePowerup3D(x, y);
              destroyedCoordsList.push({x, y});
         }
@@ -1805,7 +1860,7 @@ async function triggerFuelChainExplosion(startX, startY) {
 }
 
 
-// --- Animate Move Function ---
+// --- Animate Move Function --- (Unchanged)
 function animateMove(mesh, targetGridPos) {
 	return new Promise((resolve) => {
 		const startPos3D = mesh.position.clone();
@@ -1845,16 +1900,17 @@ function animateMove(mesh, targetGridPos) {
 	});
 }
 
-// --- Utility Wait Function ---
+// --- Utility Wait Function --- (Unchanged)
 function wait(duration) {
 	return new Promise(resolve => setTimeout(resolve, duration));
 }
 
 
-// --- Powerup Logic Functions ---
+// --- Powerup Logic Functions --- (Modified for Spawning)
+
+// Spawn Initial Powerups (Unchanged from previous correct version)
 function spawnInitialPowerups() {
     console.log("Spawning initial fuel cells (Weighted Random Sampling)...");
-    // Clear existing powerups before spawning new ones
     powerupMeshes.forEach(p => disposeMesh(p.mesh));
     powerupMeshes = [];
     powerUpPositions = [];
@@ -1862,7 +1918,6 @@ function spawnInitialPowerups() {
     let availableCells = [];
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
-            // Check if it's a floor cell and not occupied by players
             if (grid[y][x] === 'floor' &&
                 !(x === playerPos.x && y === playerPos.y) &&
                 !(x === aiPos.x && y === aiPos.y)) {
@@ -1882,33 +1937,27 @@ function spawnInitialPowerups() {
         return;
     }
 
-    // Weighted sampling ( favoring cells further from AI, closer to Player)
     let weightedCells = availableCells.map(cell => {
         const distPlayer = Math.max(1, distance(cell, playerPos));
         const distAi = Math.max(1, distance(cell, aiPos));
-        const ratio = distAi / distPlayer; // Higher ratio means further from AI relative to Player
-        const diff = Math.abs(ratio - AI_DISTANCE_BIAS); // How close is the ratio to the desired bias?
-        // Weight favors cells where the ratio is close to the bias (higher weight for lower diff)
-        const weight = 0.01 + 1 / (1 + diff * diff * 10); // Add small base weight, sharp peak around bias
+        const ratio = distAi / distPlayer;
+        const diff = Math.abs(ratio - AI_DISTANCE_BIAS);
+        const weight = 0.01 + 1 / (1 + diff * diff * 10);
         return { cell, weight, ratio, distPlayer, distAi };
-    }).filter(wc => wc.weight > 0); // Ensure weight is positive
+    }).filter(wc => wc.weight > 0);
 
     let totalWeight = weightedCells.reduce((sum, wc) => sum + wc.weight, 0);
     let spawnedCount = 0;
-    const maxSpawnAttempts = availableCells.length * 3; // Limit attempts
+    const maxSpawnAttempts = availableCells.length * 3;
     let attempts = 0;
 
     while (spawnedCount < INITIAL_POWERUP_COUNT && weightedCells.length > 0 && attempts < maxSpawnAttempts) {
         attempts++;
-        if (totalWeight <= 0) {
-            console.warn("Total weight is zero or negative, cannot perform weighted sampling. Attempt:", attempts);
-            break; // Avoid infinite loop if weights become zero
-        }
+        if (totalWeight <= 0) break;
 
         let randomVal = Math.random() * totalWeight;
         let chosenIndex = -1;
 
-        // Select weighted random index
         for (let i = 0; i < weightedCells.length; i++) {
             randomVal -= weightedCells[i].weight;
             if (randomVal <= 0) {
@@ -1916,30 +1965,19 @@ function spawnInitialPowerups() {
                 break;
             }
         }
-        // Fallback if randomVal didn't hit exactly (floating point issues)
-        if (chosenIndex === -1 && weightedCells.length > 0) {
-             console.warn("Weighted sampling fallback triggered (chosenIndex = -1). Selecting last element. Attempt:", attempts);
-             chosenIndex = weightedCells.length - 1;
-        }
+        if (chosenIndex === -1 && weightedCells.length > 0) chosenIndex = weightedCells.length - 1;
 
         if (chosenIndex !== -1 && chosenIndex < weightedCells.length) {
             const chosenWeightedCell = weightedCells[chosenIndex];
-            const { cell, ratio, distPlayer, distAi } = chosenWeightedCell;
-
-            // Spawn the powerup
-            powerUpPositions.push({ x: cell.x, y: cell.y }); // Add logical position
-            const newPowerup = createPowerup3D(cell.x, cell.y); // Create visual
+            const { cell } = chosenWeightedCell;
+            powerUpPositions.push({ x: cell.x, y: cell.y });
+            const newPowerup = createPowerup3D(cell.x, cell.y);
             if (newPowerup) powerupMeshes.push(newPowerup);
-            // console.log(` Spawned fuel cell at ${cell.x},${cell.y} (Ratio: ${ratio.toFixed(2)}, PDist: ${distPlayer}, ADist: ${distAi}, Weight: ${chosenWeightedCell.weight.toFixed(3)})`);
             spawnedCount++;
-
-            // Remove the chosen cell and its weight from the pool for next iteration
             totalWeight -= chosenWeightedCell.weight;
             weightedCells.splice(chosenIndex, 1);
-
         } else {
-             // Should not happen with the fallback, but log if it does
-             console.error("Error during weighted sampling: chosenIndex invalid or weightedCells issue. Attempt:", attempts, "TotalWeight:", totalWeight, "weightedCells.length:", weightedCells.length);
+             console.error("Error during weighted sampling.");
              break;
         }
     }
@@ -1951,8 +1989,42 @@ function spawnInitialPowerups() {
     }
 }
 
+// New: Spawn Random Powerup During Game
+function spawnRandomPowerup() {
+    if (powerUpPositions.length >= MAX_POWERUPS) {
+        // console.log("Max powerup limit reached, not spawning.");
+        return;
+    }
 
-// --- Game Over Function ---
+    let emptyCells = [];
+    for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+            // Check if it's a floor cell and not occupied by players or existing powerups
+            if (grid[y][x] === 'floor' &&
+                !(x === playerPos.x && y === playerPos.y) &&
+                !(x === aiPos.x && y === aiPos.y) &&
+                !isPowerupAt(x, y))
+            {
+                emptyCells.push({ x, y });
+            }
+        }
+    }
+
+    if (emptyCells.length > 0) {
+        const randomIndex = Math.floor(Math.random() * emptyCells.length);
+        const spawnPos = emptyCells[randomIndex];
+
+        console.log(`Spawning new fuel cell at ${spawnPos.x}, ${spawnPos.y}`);
+        powerUpPositions.push({ x: spawnPos.x, y: spawnPos.y }); // Add logical position
+        const newPowerup = createPowerup3D(spawnPos.x, spawnPos.y); // Create visual
+        if (newPowerup) powerupMeshes.push(newPowerup);
+    } else {
+        console.log("No empty cells available to spawn a new powerup.");
+    }
+}
+
+
+// --- Game Over Function --- (Unchanged logic, message reflects win condition)
 function endGame(message, winner) {
 	console.log("Game Over:", message);
 	gamePhase = "gameOver";
@@ -1964,7 +2036,7 @@ function endGame(message, winner) {
 }
 
 
-// --- Utility Functions ---
+// --- Utility Functions --- (Unchanged)
 function isValid(x, y) {
 	return x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE;
 }
@@ -1973,7 +2045,6 @@ function isWall(x, y) {
 	return isValid(x, y) && grid[y][x] === "wall";
 }
 
-// NEW Helper: Checks if a powerup exists at the given logical coordinates
 function isPowerupAt(x, y) {
     return powerUpPositions.some(p => p.x === x && p.y === y);
 }
@@ -1990,7 +2061,6 @@ function getValidMoves(unitPos, opponentPosToBlock) {
 		const nextX = unitPos.x + dir.dx;
 		const nextY = unitPos.y + dir.dy;
 
-		// Check bounds, floor type, and if the opponent is blocking the target square
 		if (isValid(nextX, nextY) &&
             grid[nextY][nextX] === "floor" &&
             !(nextX === opponentPosToBlock?.x && nextY === opponentPosToBlock?.y))
@@ -2001,7 +2071,6 @@ function getValidMoves(unitPos, opponentPosToBlock) {
 	return moves;
 }
 
-// Manhattan distance
 function distance(pos1, pos2) {
 	return Math.abs(pos1.x - pos2.x) + Math.abs(pos1.y - pos2.y);
 }
