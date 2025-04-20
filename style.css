@@ -1,45 +1,38 @@
-/* --- Base and Reset --- */
+/* --- Base and Reset (Prototype) --- */
 html, body {
     height: 100%;
     margin: 0;
     padding: 0;
-    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; /* More modern font stack */
-    background: linear-gradient(to bottom right, #1a1d21, #0f1113); /* Gradient background */
-    color: #e0e0e0; /* Light text */
-    overflow: hidden; /* Prevent body scrollbars */
-    font-size: 16px; /* Base font size */
-    line-height: 1.5;
+    font-family: sans-serif; /* Default browser font */
+    background: #e0e0e0; /* Plain light gray background */
+    color: #333; /* Basic dark text */
+    overflow: hidden;
+    font-size: 14px; /* Smaller base font */
+    line-height: 1.4;
 }
 
 * {
     box-sizing: border-box;
 }
 
-/* --- Main Game Container (Flex Layout) --- */
+/* --- Main Game Container (Simple Layout) --- */
 #game-container {
-    display: flex;
-    height: 100vh; /* Full viewport height */
-    width: 100vw; /* Full viewport width */
+    display: flex; /* Keep basic flex for side-by-side */
+    height: 100vh;
+    width: 100vw;
 }
 
 /* --- Game Canvas Area --- */
 #game-canvas-area {
-    flex-grow: 1; /* Takes up remaining space */
-    position: relative;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    overflow: hidden;
-    background-color: #111315; /* Slightly darker canvas background */
-    box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.5); /* Inner shadow for depth */
+    flex-grow: 1; /* Take available space */
+    border-right: 1px solid #999; /* Simple separator */
+    background-color: #cccccc; /* Slightly darker canvas area */
+    position: relative; /* Needed for canvas container? */
 }
 
 #gameCanvasContainer {
     width: 100%;
     height: 100%;
-    max-width: 100%;
-    max-height: 100%;
-    /* Adding subtle perspective might enhance the 3D feel if desired, but requires parent transforms */
 }
 
 #threeCanvas {
@@ -48,330 +41,189 @@ html, body {
     height: 100%;
 }
 
-/* --- UI Panel (Right Side) --- */
+/* --- UI Panel (Simple) --- */
 #ui-panel {
-    width: 320px; /* Fixed width for the UI panel */
-    flex-shrink: 0; /* Prevent panel from shrinking */
-    background-color: #282c34; /* Dark UI panel background */
-    /* Add a subtle frosted glass effect if supported and desired */
-    /* backdrop-filter: blur(5px); */
-    /* background-color: rgba(40, 44, 52, 0.85); */ /* Slightly transparent */
-    padding: 25px 20px;
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto; /* Allow scrolling if content overflows height */
-    border-left: 1px solid #444; /* Separator */
-    box-shadow: -5px 0 15px rgba(0, 0, 0, 0.3); /* Shadow for panel separation */
+    width: 250px; /* Fixed width, smaller */
+    flex-shrink: 0;
+    background-color: #f8f8f8; /* Off-white UI panel */
+    padding: 10px;
+    overflow-y: auto; /* Basic scroll */
+    border: none; /* Remove extra borders */
+    box-shadow: none; /* Remove shadows */
 }
 
 h1 {
     text-align: center;
-    color: #61dafb; /* Accent color for title */
+    color: #000; /* Black */
     margin-top: 0;
-    margin-bottom: 25px;
-    font-size: 1.8em; /* Slightly larger title */
-    font-weight: 700; /* Bolder title */
-    letter-spacing: 1.5px;
-    text-shadow: 0 0 5px rgba(97, 218, 251, 0.3); /* Subtle text shadow */
+    margin-bottom: 15px;
+    font-size: 1.4em;
+    font-weight: bold;
+    letter-spacing: normal; /* Default */
+    text-shadow: none; /* Remove shadows */
+    border-bottom: 1px solid #ccc; /* Simple separator */
+    padding-bottom: 5px;
 }
 
 h2 {
-    color: #abb2bf; /* Lighter grey for subheadings */
-    margin-top: 0;
-    margin-bottom: 15px;
-    font-size: 1.2em; /* Slightly larger subheading */
-    font-weight: 600; /* Bolder subheading */
-    border-bottom: 2px solid #4b5263; /* Darker, thicker separator */
-    padding-bottom: 8px;
-    letter-spacing: 0.5px;
+    color: #222; /* Darker gray */
+    margin-top: 15px; /* Space before sections */
+    margin-bottom: 8px;
+    font-size: 1.1em;
+    font-weight: bold;
+    border: none; /* Remove borders */
+    padding-bottom: 0;
+    letter-spacing: normal;
 }
 
 .ui-section {
-    margin-bottom: 30px; /* More space between sections */
-    background-color: #323841; /* Slightly lighter background for sections */
-    padding: 15px;
-    border-radius: 8px;
-    border: 1px solid #4b5263;
-    box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.3);
+    margin-bottom: 15px; /* Space between sections */
+    background-color: transparent; /* No section background */
+    padding: 0; /* No extra padding */
+    border: none; /* Remove borders */
+    box-shadow: none; /* Remove shadows */
+    border-radius: 0; /* Sharp corners */
 }
 
 p {
-    margin-top: 8px;
-    margin-bottom: 8px; /* Adjust margin */
-    color: #c8cdd4; /* Standard text color */
-    font-size: 1em; /* Base font size */
+    margin-top: 4px;
+    margin-bottom: 4px;
+    color: #333;
+    font-size: 1em;
 }
 
 /* Status/Info Specifics */
 #phaseIndicator {
-    font-weight: 700;
-    color: #e5c07b; /* Yellowish for phase */
-    font-size: 1.1em;
-    text-shadow: 0 0 3px rgba(229, 192, 123, 0.3);
+    font-weight: bold;
+    color: #555; /* Dark gray */
+    font-size: 1.0em;
+    text-shadow: none;
 }
 
-#messageAreaContainer { /* Style the container, not the paragraph */
-     margin-top: 15px;
-     background: linear-gradient(to bottom right, #3c3131, #2a1f1f); /* Darker, gradient background */
-     padding: 12px 15px;
-     border-radius: 6px;
-     border: 1px solid #5c3f3f;
-     box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.4);
-     /* --- CRITICAL: Reserve space --- */
-     min-height: 5em; /* Reserve space for ~3 lines */
-     display: flex;
-     align-items: center;
-     box-sizing: border-box;
+#messageAreaContainer {
+     margin-top: 8px;
+     background: #fff; /* White background */
+     padding: 5px 8px;
+     border: 1px solid #bbb; /* Simple border */
+     border-radius: 0;
+     box-shadow: none;
+     min-height: 3em; /* Reserve space */
+     display: block; /* Let paragraph flow */
 }
 
 #messageArea {
-     margin: 0; /* Remove paragraph default margin */
-     color: #e06c75; /* Reddish for messages */
-     font-weight: 500;
+     margin: 0;
+     color: #c00; /* Red for messages */
+     font-weight: normal;
      font-size: 1em;
-     line-height: 1.5;
+     line-height: 1.3;
 }
 
-/* Added styles for Planning Info */
 #planningInfo {
-    margin-top: 12px;
-    padding-top: 8px;
-    border-top: 1px dashed #4b5263;
-    min-height: 1.5em; /* Reserve space */
-    text-align: center;
+    margin-top: 8px;
+    padding-top: 5px;
+    border-top: 1px dashed #ccc; /* Simple dashed line */
+    min-height: 1.3em;
+    text-align: left; /* Align left */
 }
 #planFuelCostInfo {
-    font-size: 0.95em;
-    font-weight: 600;
+    font-size: 0.9em;
+    font-weight: bold; /* Keep bold */
 }
-/* End of Added styles */
 
 /* Controls Specifics */
-#playerFuelInfo, #aiFuelInfo { /* Updated selectors */
-    font-weight: 600;
-    color: #98c379; /* Greenish for fuel */
-    font-size: 1em;
-    margin-bottom: 5px; /* Less space below levels */
-    text-shadow: 0 0 3px rgba(152, 195, 121, 0.3);
-}
-/* Added for health - similar style to fuel */
+#playerFuelInfo, #aiFuelInfo,
 #playerHealthInfo, #aiHealthInfo {
-    font-weight: 600;
-    color: #e06c75; /* Reddish for health */
+    font-weight: normal; /* Normal weight */
+    color: #333; /* Default text color */
     font-size: 1em;
-    margin-bottom: 5px;
-    text-shadow: 0 0 3px rgba(224, 108, 117, 0.3);
+    margin-bottom: 3px;
+    text-shadow: none;
 }
 
+/* Remove status grid */
+/* .status-grid { ... } */
 
-/* Buttons */
+
+/* Buttons (Basic) */
 button {
-    padding: 12px 20px; /* Increased padding */
-    font-size: 1.05em; /* Slightly larger font */
-    font-weight: 600; /* Bolder text */
+    padding: 5px 10px; /* Smaller padding */
+    font-size: 1em;
+    font-weight: normal; /* Normal weight */
     cursor: pointer;
-    border: none; /* Remove default border */
-    border-radius: 6px; /* Slightly more rounded corners */
-    background: linear-gradient(to bottom, #4b5263, #3a3f4b); /* Gradient background */
-    color: #d0d8e2; /* Light button text */
+    border: 1px solid #999; /* Basic border */
+    border-radius: 0; /* Sharp corners */
+    background: #eee; /* Light gray background */
+    color: #333; /* Dark text */
     display: block;
     width: 100%;
     box-sizing: border-box;
-    margin-bottom: 12px; /* More space between buttons */
+    margin-bottom: 8px;
     text-align: center;
-    transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease, opacity 0.2s ease;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-    letter-spacing: 0.5px;
+    transition: none; /* No transitions */
+    box-shadow: none;
 }
 
 button:hover {
-    background: linear-gradient(to bottom, #5c6370, #4b5263);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+    background: #ddd; /* Slightly darker hover */
 }
 
 button:active {
-    transform: translateY(2px); /* Subtle press effect */
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    background: #ccc; /* Darker active */
+    transform: none; /* No press effect */
 }
 
 button#btnReset {
-     background: linear-gradient(to bottom, #dc3545, #c82333); /* Red gradient for reset */
-     border: 1px solid #b02a37;
+     background: #fdd; /* Light red background */
+     border-color: #c99;
+     color: #900; /* Dark red text */
 }
 button#btnReset:hover {
-    background: linear-gradient(to bottom, #c82333, #b02a37);
+    background: #fcc;
 }
 
 button:disabled {
-    cursor: not-allowed;
-    opacity: 0.6; /* Slightly more opaque when disabled */
-    background: linear-gradient(to bottom, #31353f, #2a2e37);
-    box-shadow: none;
-    transform: none;
+    cursor: default; /* Default cursor */
+    opacity: 0.5; /* Basic disabled look */
+    background: #eee;
+    border-color: #bbb;
+    color: #888;
 }
 
 .mode-select {
-    margin-bottom: 15px;
+    margin-top: 10px; /* Space above mode buttons */
+    margin-bottom: 10px;
     display: flex;
-    gap: 15px; /* More space between mode buttons */
+    gap: 8px; /* Space between buttons */
 }
 
 .mode-select button {
-    flex: 1; /* Share space */
-    margin-bottom: 0; /* Remove bottom margin for flex items */
+    flex: 1;
+    margin-bottom: 0;
 }
 
 .mode-button.active {
-    background: linear-gradient(to bottom, #61afef, #4094d1); /* Blue gradient for active mode */
-    color: #1e2227; /* Dark text on active */
-    border: 1px solid #2188b8;
-    font-weight: 700; /* Bolder active text */
-    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 0 0 10px rgba(97, 175, 239, 0.5); /* Enhanced active shadow */
+    background: #aaf; /* Light blue active state */
+    border-color: #88d;
+    color: #005; /* Dark blue text */
+    font-weight: bold; /* Bold active text */
+    box-shadow: none;
 }
 .mode-button.active:hover {
-    background: linear-gradient(to bottom, #56a1d8, #3985bd);
-     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5), 0 0 12px rgba(97, 175, 239, 0.6);
+    background: #99e; /* Slightly darker active hover */
 }
 
 /* Footer */
 .ui-footer {
     margin-top: auto; /* Push footer to bottom */
-    padding-top: 20px;
-    font-size: 0.85em;
+    padding-top: 10px;
+    font-size: 0.8em;
     text-align: center;
-    color: #5c6370;
-    border-top: 1px solid #444;
-    text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+    color: #888; /* Lighter gray */
+    border-top: 1px solid #ccc;
+    text-shadow: none;
 }
 
 
-/* --- Responsive Design --- */
-
-/* Breakpoint for stacking UI below canvas */
-@media (max-width: 1000px) {
-    #game-container {
-        flex-direction: column; /* Stack vertically */
-    }
-
-    #game-canvas-area {
-        flex-grow: 1; /* Takes most of the height */
-        height: 65vh; /* Example: 65% of viewport height */
-        min-height: 300px; /* Ensure minimum height */
-         box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.5), 0 5px 15px rgba(0, 0, 0, 0.3); /* Add bottom shadow when stacked */
-    }
-
-    #ui-panel {
-        width: 100%; /* Full width */
-        height: 35vh; /* Remaining height */
-        min-height: 280px; /* Minimum height for UI */
-        border-left: none; /* No left border when stacked */
-        border-top: 1px solid #444; /* Add top border */
-        flex-direction: row; /* Arrange sections side-by-side */
-        flex-wrap: wrap; /* Allow sections to wrap */
-        justify-content: space-around; /* Distribute sections */
-        align-items: flex-start;
-        padding: 15px; /* Adjust padding */
-        gap: 15px 20px; /* Row and column gap */
-        box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.3); /* Shadow for panel separation */
-    }
-
-    h1 {
-        width: 100%; /* Make title span full width */
-        text-align: center;
-        margin-bottom: 20px;
-        font-size: 1.6em;
-    }
-
-    .ui-section {
-        flex-basis: 250px; /* Base width for sections */
-        flex-grow: 1; /* Allow sections to grow */
-        margin-bottom: 0; /* Remove bottom margin */
-        min-width: 200px;
-        padding: 12px;
-    }
-
-    h2 {
-        font-size: 1.1em;
-        margin-bottom: 10px;
-        border-bottom: 1px solid #4b5263;
-    }
-
-    #messageAreaContainer { min-height: 4em; margin-top: 10px; }
-    #messageArea { font-size: 0.95em; }
-
-    /* Ensure planning info fits */
-    #planningInfo { margin-top: 8px; padding-top: 5px; }
-    #planFuelCostInfo { font-size: 0.9em; }
-
-    button { padding: 10px 15px; font-size: 1em; margin-bottom: 8px;}
-    button:last-child { margin-bottom: 0; } /* Remove margin on last button in section */
-
-    .mode-select { gap: 10px; margin-bottom: 10px;}
-
-    .ui-footer { display: none; } /* Hide footer on smaller layout */
-}
-
-/* Tablet landscape and similar (adjust section basis) */
-@media (max-width: 1200px) and (min-width: 1001px) {
-    #ui-panel {
-        width: 280px; /* Slightly narrower panel on larger screens */
-    }
-    h1 { font-size: 1.6em; }
-    h2 { font-size: 1.1em; }
-    .ui-section { padding: 15px;}
-    button { padding: 10px 16px; font-size: 1em;}
-}
-
-
-/* Very small screens */
-@media (max-width: 500px) {
-     html, body { font-size: 14px; } /* Smaller base font */
-
-     #game-canvas-area {
-        height: 55vh; /* Less height for canvas */
-        min-height: 250px;
-     }
-      #ui-panel {
-        height: 45vh; /* More height for UI */
-        min-height: 300px;
-        flex-direction: column; /* Stack sections vertically again */
-        align-items: stretch;
-        justify-content: flex-start;
-        padding: 10px;
-        overflow-y: auto; /* Ensure scrolling if needed */
-        gap: 10px;
-     }
-     h1 { font-size: 1.5em; margin-bottom: 10px;}
-     h2 { font-size: 1.1em; margin-bottom: 8px; }
-     .ui-section {
-         flex-basis: auto;
-         min-width: unset;
-         margin-bottom: 10px;
-         padding: 10px;
-     }
-     #messageAreaContainer { min-height: 3.5em; margin-top: 8px; padding: 8px 10px;}
-     #messageArea { font-size: 0.9em; }
-
-     /* Ensure planning info fits */
-    #planningInfo { margin-top: 8px; padding-top: 5px; }
-    #planFuelCostInfo { font-size: 0.85em; }
-
-
-     p { font-size: 0.9em; margin-bottom: 6px;}
-
-     button { font-size: 0.95em; padding: 8px 12px; margin-bottom: 8px;}
-     .mode-select { flex-direction: column; gap: 8px;} /* Stack mode buttons */
-     .mode-select button { width: 100%; margin-bottom: 0;}
-}
-
-/* Status grid layout */
-.status-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr; /* Two equal columns */
-    gap: 0px 10px; /* Row gap 0, Column gap 10px */
-    margin-bottom: 15px; /* Space below the grid */
-}
-
-.status-grid p {
-    margin: 2px 0; /* Reduce vertical margins for status items */
-}
+/* --- NO Responsive Design --- */
+/* Remove all @media queries */

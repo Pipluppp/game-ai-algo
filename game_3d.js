@@ -2,10 +2,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import TWEEN from "@tweenjs/tween.js";
-import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
-import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
-import { ExtrudeGeometry } from "three"; // Needed for Hearts
+// Removed EffectComposer, RenderPass, UnrealBloomPass, ExtrudeGeometry
 
 // --- DOM Elements ---
 const canvasContainer = document.getElementById("gameCanvasContainer");
@@ -38,66 +35,65 @@ const INITIAL_HEALTH = 3;
 const MAX_POWERUPS = Math.floor(GRID_SIZE * GRID_SIZE * 0.04);
 
 // Timing Constants
-const MISSILE_TRAVEL_DURATION = 1200;
-const MOVEMENT_DURATION = 400;
+const MISSILE_TRAVEL_DURATION = 800; // Faster?
+const MOVEMENT_DURATION = 250; // Faster?
 const AI_THINK_DELAY = 50;
-const ACTION_RESOLVE_DELAY = 200;
-const EXPLOSION_DURATION = 700; // Base duration for normal explosions
+const ACTION_RESOLVE_DELAY = 150;
+const EXPLOSION_DURATION = 500; // Faster?
 
 // --- NEW MECHANICS Constants ---
 const FUEL_EXPLOSION_RADIUS = 2;
-const FUEL_EXPLOSION_SCALE_MULTIPLIER = 1.8;
-const FUEL_EXPLOSION_PARTICLE_MULTIPLIER = 2.0;
+const FUEL_EXPLOSION_SCALE_MULTIPLIER = 1.5; // Smaller
+const FUEL_EXPLOSION_PARTICLE_MULTIPLIER = 1.0; // Fewer
 const NUKES_PER_ROUND = 3;
 const NUKE_DAMAGE = 1;
-const NUKE_EXPLOSION_SCALE_MULTIPLIER = 1.0;
-const NUKE_EXPLOSION_PARTICLE_MULTIPLIER = 3.5;
-const NUKE_EXPLOSION_DURATION_MULTIPLIER = 1.4;
-const NUKE_INDICATOR_PULSE_DURATION = 800;
-const DAMPENER_PULSE_SPEED = 0.8; // Speed for dampener visual effect
-const DAMPENER_PULSE_AMOUNT = 0.08; // How much the dampener pulses vertically
+const NUKE_EXPLOSION_SCALE_MULTIPLIER = 0.8; // Smaller
+const NUKE_EXPLOSION_PARTICLE_MULTIPLIER = 1.5; // Fewer
+const NUKE_EXPLOSION_DURATION_MULTIPLIER = 1.0; // Normal speed
+// Removed NUKE_INDICATOR_PULSE_DURATION
+// Removed DAMPENER_PULSE_SPEED, DAMPENER_PULSE_AMOUNT
 
 // --- Three.js Setup ---
-let scene, camera, renderer, controls, composer;
+let scene, camera, renderer, controls; // Removed composer
 let gameBoardGroup;
 let floorMeshes = []; // 2D array: [y][x] -> mesh or null
 let wallMeshes = [];
 let powerupMeshes = []; // {mesh, pos}
 let playerMesh, aiMesh;
-let playerHeartsGroup, aiHeartsGroup;
+// Removed playerHeartsGroup, aiHeartsGroup
 let activeHighlights = [];
 let activeProjectiles = []; // {mesh?, trail?}
-let nukeIndicatorMeshes = []; // {mesh, tween?}
-let dampenerFloorMeshes = []; // Keep track for animation
+let nukeIndicatorMeshes = []; // {mesh} - Removed tween
+let dampenerFloorMeshes = []; // Keep track BUT NO ANIMATION
 
-// Materials
-const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.9, metalness: 0.2, receiveShadow: true, flatShading: true });
-const dampenerMaterial = new THREE.MeshStandardMaterial({ color: 0x6a0dad, roughness: 0.7, metalness: 0.3, emissive: 0x4a097d, emissiveIntensity: 0.8, receiveShadow: true, flatShading: true, transparent: true, opacity: 0.95 });
-const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x5a6a7a, roughness: 0.7, metalness: 0.3, emissive: 0x101010, emissiveIntensity: 0.1, flatShading: true, castShadow: true, receiveShadow: true });
-const playerMaterial = new THREE.MeshStandardMaterial({ color: 0x007bff, roughness: 0.4, metalness: 0.5, emissive: 0x003a7f, emissiveIntensity: 0.5, castShadow: true });
-const aiMaterial = new THREE.MeshStandardMaterial({ color: 0xdc3545, roughness: 0.4, metalness: 0.5, emissive: 0x6b1a22, emissiveIntensity: 0.5, castShadow: true });
-const heartMaterial = new THREE.MeshStandardMaterial({ color: 0xff4444, emissive: 0xcc2222, emissiveIntensity: 0.6, roughness: 0.6, metalness: 0.2, flatShading: true });
-const powerupMaterial = new THREE.MeshStandardMaterial({ color: 0xffc107, emissive: 0xffaa00, emissiveIntensity: 1.8, roughness: 0.2, metalness: 0.8, castShadow: true });
-const moveHighlightMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00, transparent: true, opacity: 0.4, emissive: 0x00ff00, emissiveIntensity: 0.2 });
-const pathHighlightMaterial = new THREE.MeshStandardMaterial({ color: 0xffa500, transparent: true, opacity: 0.5, emissive: 0xffa500, emissiveIntensity: 0.3 });
-const invalidPathHighlightMaterial = new THREE.MeshStandardMaterial({ color: 0x888888, transparent: true, opacity: 0.3, emissive: 0x444444, emissiveIntensity: 0.1 });
-const hitHighlightMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000, transparent: true, opacity: 0.6, emissive: 0xff0000, emissiveIntensity: 0.5 });
-const nukeIndicatorMaterial = new THREE.MeshStandardMaterial({ color: 0xff6600, emissive: 0xff8822, emissiveIntensity: 1.5, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false });
+// --- PROTOTYPE Materials (Basic) ---
+const floorMaterial = new THREE.MeshBasicMaterial({ color: 0xaaaaaa });
+const dampenerMaterial = new THREE.MeshBasicMaterial({ color: 0xaaaaff }); // Light blue tint
+const wallMaterial = new THREE.MeshBasicMaterial({ color: 0x555555 });
+const playerMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 }); // Bright Green
+const aiMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Bright Red
+// Removed heartMaterial
+const powerupMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // Bright Yellow
+const moveHighlightMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.4 });
+const pathHighlightMaterial = new THREE.MeshBasicMaterial({ color: 0xffa500, transparent: true, opacity: 0.5 });
+const invalidPathHighlightMaterial = new THREE.MeshBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.3 });
+const hitHighlightMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.6 });
+const nukeIndicatorMaterial = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.6, side: THREE.DoubleSide }); // Static orange
 
-// Missile/Explosion Materials
-const playerMissileCoreMaterial = new THREE.MeshStandardMaterial({ color: 0x00bfff, emissive: 0x00bfff, emissiveIntensity: 2.0, roughness: 0.1, metalness: 0.6 });
-const aiMissileCoreMaterial = new THREE.MeshStandardMaterial({ color: 0xff6a6a, emissive: 0xff6a6a, emissiveIntensity: 2.0, roughness: 0.1, metalness: 0.6 });
-const missileTrailMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.15, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, sizeAttenuation: true, depthWrite: false });
-const explosionShockwaveMaterial = new THREE.MeshBasicMaterial({ color: 0xffccaa, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false });
-const explosionParticleMaterial = new THREE.PointsMaterial({ color: 0xff8844, size: 0.25, transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending, sizeAttenuation: true, depthWrite: false, vertexColors: true });
-const nukeExplosionBaseColor = new THREE.Color(0xff5500);
+// Missile/Explosion Materials (Basic)
+const playerMissileCoreMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff }); // Cyan
+const aiMissileCoreMaterial = new THREE.MeshBasicMaterial({ color: 0xff8888 }); // Light Red
+const missileTrailMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.2, transparent: true, opacity: 0.7, sizeAttenuation: true, depthWrite: false });
+const explosionShockwaveMaterial = new THREE.MeshBasicMaterial({ color: 0xffccaa, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }); // Simple expand/fade sphere
+const explosionParticleMaterial = new THREE.PointsMaterial({ color: 0xff8844, size: 0.3, transparent: true, opacity: 0.9, sizeAttenuation: true, depthWrite: false, vertexColors: false }); // Basic orange points
+const nukeExplosionBaseColor = new THREE.Color(0xff5500); // Still used for explosion color
 
 // Raycasting
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 let intersectionPlane;
 
-// --- Game State ---
+// --- Game State (Unchanged) ---
 let grid = []; // Contains "floor", "wall", or "dampener"
 let playerPos = { x: -1, y: -1 };
 let aiPos = { x: -1, y: -1 };
@@ -118,63 +114,56 @@ let isResolving = false;
 
 // --- Initialization ---
 function init() {
-    console.log("Initializing 3D Missile Game with Gravity Dampeners...");
+    console.log("Initializing PROTOTYPE Missile Game...");
     initThreeJS();
     initGameLogic();
     setupInputListeners();
     animate();
-    console.log("Game Initialized.");
+    console.log("Game Initialized (Prototype).");
 }
 
 function initThreeJS() {
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0f1113);
+    scene.background = new THREE.Color(0xdddddd); // Light gray background
     const aspect = canvasContainer.clientWidth / canvasContainer.clientHeight;
     camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 100);
     camera.position.set(0, GRID_SIZE * CELL_3D_SIZE * 0.8, GRID_SIZE * CELL_3D_SIZE * 0.7);
     camera.lookAt(0, 0, 0);
-    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+
+    // Simple Renderer
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: false }); // No anti-aliasing
     renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    directionalLight.position.set(GRID_SIZE * CELL_3D_SIZE * 0.6, GRID_SIZE * CELL_3D_SIZE * 1.2, GRID_SIZE * CELL_3D_SIZE * 0.5);
-    directionalLight.castShadow = true;
-    directionalLight.shadow.mapSize.width = 2048;
-    directionalLight.shadow.mapSize.height = 2048;
-    directionalLight.shadow.camera.near = 0.5;
-    directionalLight.shadow.camera.far = GRID_SIZE * CELL_3D_SIZE * 2.5;
-    const shadowCamSize = GRID_SIZE * CELL_3D_SIZE * 0.7;
-    directionalLight.shadow.camera.left = -shadowCamSize;
-    directionalLight.shadow.camera.right = shadowCamSize;
-    directionalLight.shadow.camera.top = shadowCamSize;
-    directionalLight.shadow.camera.bottom = -shadowCamSize;
-    scene.add(directionalLight);
-    const ambientLight = new THREE.AmbientLight(0x808080, 0.6);
+    renderer.shadowMap.enabled = false; // NO SHADOWS
+
+    // Simple Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.0); // Brighter ambient
     scene.add(ambientLight);
-    const hemisphereLight = new THREE.HemisphereLight(0x4488bb, 0x080820, 0.5);
-    scene.add(hemisphereLight);
-    composer = new EffectComposer(renderer);
-    composer.addPass(new RenderPass(scene, camera));
-    const bloomPass = new UnrealBloomPass(new THREE.Vector2(canvasContainer.clientWidth, canvasContainer.clientHeight), 1.0, 0.4, 0.85);
-    composer.addPass(bloomPass);
+    // Removed Directional, Hemisphere lights
+
+    // Removed Composer and Bloom Pass
+
+    // Controls (Keep for interaction, disable damping)
     controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.1;
+    controls.enableDamping = false; // Less smooth
+    // controls.dampingFactor = 0.1; // Removed
     controls.target.set(0, 0, 0);
     controls.maxPolarAngle = Math.PI / 2 - 0.05;
     controls.minDistance = CELL_3D_SIZE * 3;
     controls.maxDistance = CELL_3D_SIZE * GRID_SIZE * 1.5;
+
     gameBoardGroup = new THREE.Group();
     scene.add(gameBoardGroup);
+
+    // Intersection plane (keep for input)
     const planeSize = GRID_SIZE * CELL_3D_SIZE;
     const planeGeom = new THREE.PlaneGeometry(planeSize, planeSize);
     const planeMat = new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide });
     intersectionPlane = new THREE.Mesh(planeGeom, planeMat);
     intersectionPlane.rotation.x = -Math.PI / 2;
-    intersectionPlane.position.y = -0.04; // Slightly below floor
+    intersectionPlane.position.y = -0.04;
     scene.add(intersectionPlane);
+
     window.addEventListener("resize", onWindowResize, false);
     onWindowResize();
 }
@@ -186,13 +175,13 @@ function onWindowResize() {
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     renderer.setSize(width, height);
-    composer.setSize(width, height);
+    // Removed composer.setSize
 }
 
 function initGameLogic() {
     clearBoard3D();
-    generateGrid(); // Now includes dampener spawning
-    createBoard3D(); // Now includes dampener rendering
+    generateGrid();
+    createBoard3D();
 
     const startPositions = findStartPositions();
     if (!startPositions) {
@@ -226,12 +215,12 @@ function initGameLogic() {
 
     createUnits3D();
     spawnInitialPowerups();
-    selectNextNukeLocations(); // Select the first set of nukes and show indicators
+    selectNextNukeLocations();
 
-    setMessage("Your Turn: Plan your move or missile shot. Watch out for incoming impacts and dampeners!");
+    setMessage("Your Turn: Plan move/shoot.");
     updatePhaseIndicator();
     updateFuelInfo();
-    updateHealthInfo();
+    updateHealthInfo(); // Update UI, no 3D hearts
     enablePlanningControls();
     clearHighlights();
     clearPlanningCostUI();
@@ -250,7 +239,7 @@ function setupInputListeners() {
 }
 
 
-// --- Grid Generation Functions (UPDATED for DAMPENERS) ---
+// --- Grid Generation Functions (UNCHANGED) ---
 function generateGrid() {
     let attempts = 0;
     while (attempts < 10) {
@@ -311,32 +300,23 @@ function generateGrid() {
         console.warn("WARNING: Grid may still be disconnected.");
     }
 }
-
 function isGridConnected() {
     const startNode = findFirstFloorOrDampener(); // Check connectivity for both floor types
     if (!startNode) return false;
-
     const q = [startNode];
     const visited = new Set([`${startNode.x},${startNode.y}`]);
     let reachableFloorCount = 0;
     let totalFloorCount = 0;
-
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
             if (grid[y][x] === "floor" || grid[y][x] === "dampener") totalFloorCount++; // Count both
         }
     }
     if (totalFloorCount === 0) return false;
-
     while (q.length > 0) {
         const { x, y } = q.shift();
         reachableFloorCount++;
-
-        const neighbors = [
-            { x: x + 1, y: y }, { x: x - 1, y: y },
-            { x: x, y: y + 1 }, { x: x, y: y - 1 }
-        ];
-
+        const neighbors = [ { x: x + 1, y: y }, { x: x - 1, y: y }, { x: x, y: y + 1 }, { x: x, y: y - 1 } ];
         for (const n of neighbors) {
             const key = `${n.x},${n.y}`;
             if (isValid(n.x, n.y) && (grid[n.y][n.x] === "floor" || grid[n.y][n.x] === "dampener") && !visited.has(key)) { // Check both
@@ -347,7 +327,6 @@ function isGridConnected() {
     }
     return reachableFloorCount === totalFloorCount;
 }
-
 function findFirstFloorOrDampener() {
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
@@ -356,22 +335,12 @@ function findFirstFloorOrDampener() {
     }
     return null;
 }
-
-// --- Find Start Positions (Unchanged logic, but uses updated BFS check) ---
 function findStartPositions() {
-    const potentialStarts = [
-        { x: 2, y: 2 },
-        { x: GRID_SIZE - 3, y: GRID_SIZE - 3 },
-        { x: 2, y: GRID_SIZE - 3 },
-        { x: GRID_SIZE - 3, y: 2 },
-    ];
-
+    const potentialStarts = [ { x: 2, y: 2 }, { x: GRID_SIZE - 3, y: GRID_SIZE - 3 }, { x: 2, y: GRID_SIZE - 3 }, { x: GRID_SIZE - 3, y: 2 }, ];
     const playerStart = findNearestFloorBFS(potentialStarts[0]);
-
     let aiStart = null;
     const farCorners = [potentialStarts[1], potentialStarts[2], potentialStarts[3]];
     farCorners.sort(() => Math.random() - 0.5);
-
     for (const corner of farCorners) {
         const potentialAiStart = findNearestFloorBFS(corner, playerStart ? [playerStart] : []);
         if (potentialAiStart && playerStart && distance(playerStart, potentialAiStart) > GRID_SIZE * 0.7) {
@@ -379,14 +348,10 @@ function findStartPositions() {
             break;
         }
     }
-
     if (!aiStart && playerStart) {
         console.warn("Could not find a far start position for AI, trying any reachable floor.");
         let candidateAIStarts = [];
-        const candidateSearchPoints = [
-            { x: Math.floor(GRID_SIZE / 2), y: Math.floor(GRID_SIZE / 2) },
-            { x: GRID_SIZE - 3, y: GRID_SIZE - 3 }, { x: 2, y: GRID_SIZE - 3 }, { x: GRID_SIZE - 3, y: 2 }
-        ];
+        const candidateSearchPoints = [ { x: Math.floor(GRID_SIZE / 2), y: Math.floor(GRID_SIZE / 2) }, { x: GRID_SIZE - 3, y: GRID_SIZE - 3 }, { x: 2, y: GRID_SIZE - 3 }, { x: GRID_SIZE - 3, y: 2 } ];
         for (const sp of candidateSearchPoints) {
             const potentialAi = findNearestFloorBFS(sp, [playerStart]);
             if (potentialAi && distance(playerStart, potentialAi) > GRID_SIZE * 0.5) {
@@ -400,42 +365,30 @@ function findStartPositions() {
             aiStart = findNearestFloorBFS({ x: Math.floor(GRID_SIZE / 2), y: Math.floor(GRID_SIZE / 2) }, [playerStart]);
         }
     }
-
     if (playerStart && aiStart && (playerStart.x !== aiStart.x || playerStart.y !== aiStart.y)) {
         console.log(`Player start: ${playerStart.x},${playerStart.y}. AI start: ${aiStart.x},${aiStart.y}`);
         return { player: playerStart, ai: aiStart };
     }
-
     console.error("Failed to find suitable start positions even with fallbacks.");
     return null;
 }
-
 function findNearestFloorBFS(startSearchPos, occupied = []) {
     const q = [{ pos: startSearchPos, dist: 0 }];
     const visited = new Set([`${startSearchPos.x},${startSearchPos.y}`]);
     const occupiedSet = new Set(occupied.map(occ => `${occ.x},${occ.y}`));
-
     while (q.length > 0) {
         q.sort((a, b) => a.dist - b.dist);
         const current = q.shift();
         const { x, y } = current.pos;
         const currentKey = `${x},${y}`;
-
-        // Check if current position is valid, floor/dampener, and not occupied
         if (isValid(x, y) && (grid[y][x] === "floor" || grid[y][x] === "dampener") && !occupiedSet.has(currentKey)) {
             return { x, y }; // Found the nearest valid floor
         }
-
-        const neighbors = [
-            { x: x + 1, y: y }, { x: x - 1, y: y },
-            { x: x, y: y + 1 }, { x: x, y: y - 1 }
-        ];
-
+        const neighbors = [ { x: x + 1, y: y }, { x: x - 1, y: y }, { x: x, y: y + 1 }, { x: x, y: y - 1 } ];
         for (const n of neighbors) {
             const key = `${n.x},${n.y}`;
             if (isValid(n.x, n.y) && !visited.has(key)) {
                 visited.add(key);
-                // Check grid type *before* adding to queue
                 if (grid[n.y][n.x] === "floor" || grid[n.y][n.x] === "dampener") {
                     q.push({ pos: n, dist: current.dist + 1 });
                 }
@@ -447,7 +400,7 @@ function findNearestFloorBFS(startSearchPos, occupied = []) {
 }
 
 
-// --- 3D Object Creation / Management Functions (UPDATED for DAMPENERS) ---
+// --- 3D Object Creation / Management Functions ---
 function get3DPosition(x, y, yOffset = 0) {
     const worldX = (x - (GRID_SIZE - 1) / 2) * CELL_3D_SIZE;
     const worldZ = (y - (GRID_SIZE - 1) / 2) * CELL_3D_SIZE;
@@ -465,19 +418,12 @@ function disposeMesh(mesh) {
     if (mesh.isGroup) {
         mesh.children.slice().forEach(child => disposeMesh(child));
     }
-    if (mesh.userData && mesh.userData.tween) {
-        mesh.userData.tween.stop();
-        mesh.userData.tween = null;
-    }
+    // Remove tween reference checking - no complex tweens on meshes now
     if (mesh.geometry) mesh.geometry.dispose();
     if (mesh.material) {
         if (Array.isArray(mesh.material)) {
-            mesh.material.forEach((mat) => {
-                if (mat.map) mat.map.dispose();
-                mat.dispose();
-            });
+            mesh.material.forEach(mat => mat.dispose()); // BasicMaterial has no maps
         } else {
-            if (mesh.material.map) mesh.material.map.dispose();
             mesh.material.dispose();
         }
     }
@@ -488,12 +434,11 @@ function disposeMesh(mesh) {
 
 function clearBoard3D() {
     gameBoardGroup.children.slice().forEach(child => disposeMesh(child));
-    playerHeartsGroup = null;
-    aiHeartsGroup = null;
-    floorMeshes = []; // Clear the 2D array references
+    // Removed playerHeartsGroup, aiHeartsGroup nulling
+    floorMeshes = [];
     wallMeshes = [];
     powerupMeshes = [];
-    dampenerFloorMeshes = []; // Clear dampener list
+    dampenerFloorMeshes = [];
     playerMesh = null;
     aiMesh = null;
     activeHighlights = [];
@@ -509,6 +454,7 @@ function createBoard3D() {
     floorMeshes = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null));
     dampenerFloorMeshes = []; // Reset list
     wallMeshes = [];
+    // Basic Box Geometries
     const floorGeom = new THREE.BoxGeometry(CELL_3D_SIZE, 0.2, CELL_3D_SIZE);
     const dampenerGeom = new THREE.BoxGeometry(CELL_3D_SIZE, 0.18, CELL_3D_SIZE); // Slightly thinner
     const wallGeom = new THREE.BoxGeometry(CELL_3D_SIZE, WALL_HEIGHT, CELL_3D_SIZE);
@@ -522,110 +468,74 @@ function createBoard3D() {
                 const floorMesh = new THREE.Mesh(floorGeom, floorMaterial);
                 floorMesh.position.copy(pos);
                 floorMesh.position.y = -0.1;
-                floorMesh.castShadow = false;
-                floorMesh.receiveShadow = true;
-                floorMesh.userData = { gridX: x, gridY: y, type: "floor", originalY: -0.1 };
+                // Removed shadow properties
+                floorMesh.userData = { gridX: x, gridY: y, type: "floor" }; // Removed originalY
                 gameBoardGroup.add(floorMesh);
                 floorMeshes[y][x] = floorMesh;
             } else if (cellType === "dampener") {
-                const dampenerMesh = new THREE.Mesh(dampenerGeom, dampenerMaterial.clone()); // Clone material for potential individual changes
+                const dampenerMesh = new THREE.Mesh(dampenerGeom, dampenerMaterial); // No need to clone BasicMaterial unless changing color later
                 dampenerMesh.position.copy(pos);
-                dampenerMesh.position.y = -0.11; // Slightly lower base position
-                dampenerMesh.castShadow = false;
-                dampenerMesh.receiveShadow = true;
-                dampenerMesh.userData = { gridX: x, gridY: y, type: "dampener", originalY: -0.11 }; // Store original Y
+                dampenerMesh.position.y = -0.11;
+                // Removed shadow properties
+                dampenerMesh.userData = { gridX: x, gridY: y, type: "dampener" }; // Removed originalY
                 gameBoardGroup.add(dampenerMesh);
                 floorMeshes[y][x] = dampenerMesh;
-                dampenerFloorMeshes.push(dampenerMesh); // Add to list for animation
+                dampenerFloorMeshes.push(dampenerMesh); // Still track, but no animation
             } else if (cellType === "wall") {
                 const wallMesh = new THREE.Mesh(wallGeom, wallMaterial);
                 wallMesh.position.copy(pos);
                 wallMesh.position.y = WALL_HEIGHT / 2 - 0.1;
-                wallMesh.castShadow = true;
-                wallMesh.receiveShadow = true;
+                // Removed shadow properties
                 wallMesh.userData = { gridX: x, gridY: y, type: "wall" };
                 gameBoardGroup.add(wallMesh);
                 wallMeshes.push(wallMesh);
-                floorMeshes[y][x] = null; // Ensure no floor mesh here
+                floorMeshes[y][x] = null;
             }
         }
     }
 }
 
-// --- Create Heart Geometry (Unchanged) ---
-function createHeartGeometry() {
-    const heartShape = new THREE.Shape();
-    const x = 0, y = 0;
-    heartShape.moveTo(x, y - 0.2);
-    heartShape.bezierCurveTo(x, y - 0.1, x - 0.3, y + 0.2, x - 0.3, y + 0.2);
-    heartShape.bezierCurveTo(x - 0.3, y + 0.4, x - 0.1, y + 0.5, x, y + 0.4);
-    heartShape.bezierCurveTo(x + 0.1, y + 0.5, x + 0.3, y + 0.4, x + 0.3, y + 0.2);
-    heartShape.bezierCurveTo(x + 0.3, y + 0.2, x, y - 0.1, x, y - 0.2);
-    const extrudeSettings = { steps: 1, depth: 0.15, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.04, bevelOffset: 0, bevelSegments: 3 };
-    const geometry = new THREE.ExtrudeGeometry(heartShape, extrudeSettings);
-    geometry.center();
-    geometry.rotateX(Math.PI);
-    geometry.scale(CELL_3D_SIZE * 0.3, CELL_3D_SIZE * 0.3, CELL_3D_SIZE * 0.3);
-    return geometry;
-}
-const cachedHeartGeometry = createHeartGeometry();
+// --- REMOVED Heart Geometry and Visuals ---
+// function createHeartGeometry() { ... }
+// const cachedHeartGeometry = createHeartGeometry();
+// function updateHealthVisuals(health, heartsGroup) { ... }
 
-// --- Update Health Visuals (Unchanged) ---
-function updateHealthVisuals(health, heartsGroup) {
-    if (!heartsGroup) return;
-    heartsGroup.children.slice().forEach(child => disposeMesh(child));
-    heartsGroup.clear();
-    const spacing = CELL_3D_SIZE * 0.3;
-    const totalWidth = (health - 1) * spacing;
-    const startX = -totalWidth / 2;
-    for (let i = 0; i < health; i++) {
-        const heartMesh = new THREE.Mesh(cachedHeartGeometry, heartMaterial);
-        heartMesh.position.x = startX + i * spacing;
-        heartsGroup.add(heartMesh);
-    }
-}
 
-// --- Create Units 3D (Unchanged) ---
+// --- Create Units 3D (Simplified) ---
 function createUnits3D() {
-    const playerUnitHeight = CELL_3D_SIZE * 0.9;
-    const playerUnitRadius = CELL_3D_SIZE * 0.3;
-    const playerGeom = new THREE.CapsuleGeometry(playerUnitRadius, playerUnitHeight - playerUnitRadius * 2, 4, 10);
+    // Player (Green Box)
+    const playerSize = CELL_3D_SIZE * 0.6;
+    const playerGeom = new THREE.BoxGeometry(playerSize, playerSize * 1.2, playerSize); // Slightly taller box
     playerMesh = new THREE.Mesh(playerGeom, playerMaterial);
-    playerMesh.castShadow = true;
-    playerMesh.receiveShadow = false;
-    const playerPos3D = get3DPosition(playerPos.x, playerPos.y, playerUnitHeight / 2);
+    // Removed shadow properties
+    const playerPos3D = get3DPosition(playerPos.x, playerPos.y, playerSize * 1.2 / 2); // Center box
     playerMesh.position.copy(playerPos3D);
     playerMesh.userData = { type: "player" };
     gameBoardGroup.add(playerMesh);
-    playerHeartsGroup = new THREE.Group();
-    playerHeartsGroup.position.set(0, playerUnitHeight * 0.8, 0);
-    playerMesh.add(playerHeartsGroup);
-    updateHealthVisuals(playerHealth, playerHeartsGroup);
+    // Removed heart group creation
 
-    const aiUnitHeight = CELL_3D_SIZE * 1.0;
-    const aiUnitRadius = CELL_3D_SIZE * 0.4;
-    const aiGeom = new THREE.ConeGeometry(aiUnitRadius, aiUnitHeight, 8);
+    // AI (Red Box)
+    const aiSize = CELL_3D_SIZE * 0.7; // Slightly larger box
+    const aiGeom = new THREE.BoxGeometry(aiSize, aiSize, aiSize); // Cube
     aiMesh = new THREE.Mesh(aiGeom, aiMaterial);
-    aiMesh.castShadow = true;
-    aiMesh.receiveShadow = false;
-    const aiPos3D = get3DPosition(aiPos.x, aiPos.y, aiUnitHeight / 2);
+    // Removed shadow properties
+    const aiPos3D = get3DPosition(aiPos.x, aiPos.y, aiSize / 2); // Center cube
     aiMesh.position.copy(aiPos3D);
     aiMesh.userData = { type: "ai" };
     gameBoardGroup.add(aiMesh);
-    aiHeartsGroup = new THREE.Group();
-    aiHeartsGroup.position.set(0, aiUnitHeight * 0.8, 0);
-    aiMesh.add(aiHeartsGroup);
-    updateHealthVisuals(aiHealth, aiHeartsGroup);
+    // Removed heart group creation
+
+    updateHealthInfo(); // Update UI after creation
 }
 
-// --- Create/Remove Powerup 3D (Unchanged) ---
+// --- Create/Remove Powerup 3D (Simplified) ---
 function createPowerup3D(x, y) {
-    const powerupSize = CELL_3D_SIZE * 0.3;
-    const powerupGeom = new THREE.IcosahedronGeometry(powerupSize, 0);
+    const powerupSize = CELL_3D_SIZE * 0.4;
+    const powerupGeom = new THREE.BoxGeometry(powerupSize, powerupSize, powerupSize); // Yellow Box
     const mesh = new THREE.Mesh(powerupGeom, powerupMaterial);
-    mesh.position.copy(get3DPosition(x, y, powerupSize * 0.7));
-    mesh.castShadow = true;
-    mesh.userData = { type: "powerup", gridX: x, gridY: y, spinSpeed: Math.random() * 0.03 + 0.015 };
+    mesh.position.copy(get3DPosition(x, y, powerupSize * 0.7)); // Position slightly above floor
+    // Removed shadow properties
+    mesh.userData = { type: "powerup", gridX: x, gridY: y }; // Removed spinSpeed
     gameBoardGroup.add(mesh);
     return { mesh: mesh, pos: { x, y } };
 }
@@ -640,16 +550,14 @@ function removePowerup3D(x, y) {
     else { console.warn(`Could not find fuel cell position at ${x},${y} to remove logically.`); }
 }
 
-// --- Highlighting Functions (UPDATED for DAMPENERS) ---
+// --- Highlighting Functions (Adapted for Basic Materials) ---
 function clearHighlights() {
-    // Remove existing highlight meshes
     activeHighlights.forEach(mesh => disposeMesh(mesh));
     activeHighlights = [];
 
     // Restore original floor meshes that were replaced by highlights
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
-            // If a floor *should* be here but isn't (because it was highlighted)
             if ((grid[y][x] === 'floor' || grid[y][x] === 'dampener') && !floorMeshes[y]?.[x]) {
                 const cellType = grid[y][x];
                 const pos = get3DPosition(x, y);
@@ -660,63 +568,48 @@ function clearHighlights() {
                     originalMesh = new THREE.Mesh(floorGeom, floorMaterial);
                     originalMesh.position.copy(pos);
                     originalMesh.position.y = -0.1;
-                    originalMesh.userData = { gridX: x, gridY: y, type: "floor", originalY: -0.1 };
+                    originalMesh.userData = { gridX: x, gridY: y, type: "floor" };
                 } else { // cellType === 'dampener'
                     const dampenerGeom = new THREE.BoxGeometry(CELL_3D_SIZE, 0.18, CELL_3D_SIZE);
-                    originalMesh = new THREE.Mesh(dampenerGeom, dampenerMaterial.clone());
+                    originalMesh = new THREE.Mesh(dampenerGeom, dampenerMaterial);
                     originalMesh.position.copy(pos);
                     originalMesh.position.y = -0.11;
-                    originalMesh.userData = { gridX: x, gridY: y, type: "dampener", originalY: -0.11 };
-                     // Add back to animation list if it was removed during highlight
-                    if (!dampenerFloorMeshes.some(m => m === originalMesh)) {
-                         dampenerFloorMeshes.push(originalMesh);
-                    }
+                    originalMesh.userData = { gridX: x, gridY: y, type: "dampener" };
+                    // No need to add back to animation list
                 }
-                originalMesh.castShadow = false;
-                originalMesh.receiveShadow = true;
+                // Removed shadow properties
                 gameBoardGroup.add(originalMesh);
-                floorMeshes[y][x] = originalMesh; // Put it back in the main array
+                floorMeshes[y][x] = originalMesh;
             }
         }
     }
 }
 
-
 function highlightCell(x, y, highlightMaterial) {
     const cellType = grid[y]?.[x];
     if (isValid(x, y) && (cellType === "floor" || cellType === "dampener")) {
         const existingMesh = floorMeshes[y]?.[x];
-
-        // If there's an existing floor/dampener mesh, remove it first
         if (existingMesh) {
-             // If it's a dampener, remove from animation list
-            if(existingMesh.userData.type === 'dampener') {
-                const dampenerIndex = dampenerFloorMeshes.indexOf(existingMesh);
-                if(dampenerIndex > -1) {
-                    dampenerFloorMeshes.splice(dampenerIndex, 1);
-                }
-            }
+            // No need to check dampener animation list
             disposeMesh(existingMesh);
-            floorMeshes[y][x] = null; // Mark as empty in the array temporarily
+            floorMeshes[y][x] = null;
         }
-
-        // Create and add the highlight mesh
-        const highlightGeom = new THREE.BoxGeometry(CELL_3D_SIZE, 0.25, CELL_3D_SIZE); // Slightly thicker highlight
-        const highlightMesh = new THREE.Mesh(highlightGeom, highlightMaterial.clone());
+        const highlightGeom = new THREE.BoxGeometry(CELL_3D_SIZE, 0.25, CELL_3D_SIZE); // Simple box highlight
+        const highlightMesh = new THREE.Mesh(highlightGeom, highlightMaterial); // No clone needed for basic material? Keep clone for safety.
         highlightMesh.position.copy(get3DPosition(x, y));
-        highlightMesh.position.y = -0.08; // Consistent highlight height
+        highlightMesh.position.y = -0.08;
         highlightMesh.userData = { gridX: x, gridY: y, type: "highlight" };
         gameBoardGroup.add(highlightMesh);
         activeHighlights.push(highlightMesh);
     }
 }
 
-
+// RenderHighlights (unchanged logic, uses new highlightCell)
 function renderHighlights() {
-    clearHighlights(); // Clear previous highlights and restore original floors
+    clearHighlights();
     clearPlanningCostUI();
     if (currentPlayer !== "player" || isResolving || gameOverState) {
-        return; // No highlights if not player's turn or game busy/over
+        return;
     }
     if (currentPlanningMode === "move") {
         const validMoves = getValidMoves(playerPos, aiPos);
@@ -728,13 +621,13 @@ function renderHighlights() {
             const canAfford = cost <= available;
             const pathMaterial = canAfford ? pathHighlightMaterial : invalidPathHighlightMaterial;
             plannedShootPath.forEach(p => {
-                if (!(p.x === playerPos.x && p.y === playerPos.y)) { // Don't highlight the player's own cell in path
+                if (!(p.x === playerPos.x && p.y === playerPos.y)) {
                     highlightCell(p.x, p.y, pathMaterial);
                 }
             });
             const target = plannedShootPath[plannedShootPath.length - 1];
             const targetMaterial = canAfford ? hitHighlightMaterial : invalidPathHighlightMaterial;
-            highlightCell(target.x, target.y, targetMaterial); // Highlight final target
+            highlightCell(target.x, target.y, targetMaterial);
             updatePlanningCostUI(cost, available);
         } else {
             clearPlanningCostUI();
@@ -742,22 +635,17 @@ function renderHighlights() {
     }
 }
 
-
-// --- NUKE INDICATOR & RESOLUTION LOGIC --- (Unchanged)
+// --- NUKE INDICATOR & RESOLUTION LOGIC (Simplified Visuals) ---
 function createNukeIndicator3D(x, y) {
     const radius = CELL_3D_SIZE * 0.45; const height = CELL_3D_SIZE * 0.05;
-    const indicatorGeom = new THREE.CylinderGeometry(radius, radius, height, 16, 1, true);
-    const indicatorMesh = new THREE.Mesh(indicatorGeom, nukeIndicatorMaterial.clone());
+    const indicatorGeom = new THREE.CylinderGeometry(radius, radius, height, 8, 1, false); // Less detailed cylinder
+    const indicatorMesh = new THREE.Mesh(indicatorGeom, nukeIndicatorMaterial); // No clone needed, no pulse
     indicatorMesh.position.copy(get3DPosition(x, y, height));
     indicatorMesh.rotation.x = 0;
-    indicatorMesh.userData = { type: "nuke_indicator", gridX: x, gridY: y, tween: null };
+    indicatorMesh.userData = { type: "nuke_indicator", gridX: x, gridY: y }; // Removed tween
     gameBoardGroup.add(indicatorMesh);
     nukeIndicatorMeshes.push(indicatorMesh);
-    const baseOpacity = nukeIndicatorMaterial.opacity; const pulseTargetOpacity = baseOpacity * 0.5;
-    const tweenForward = new TWEEN.Tween(indicatorMesh.material).to({ opacity: pulseTargetOpacity }, NUKE_INDICATOR_PULSE_DURATION / 2).easing(TWEEN.Easing.Quadratic.InOut);
-    const tweenBackward = new TWEEN.Tween(indicatorMesh.material).to({ opacity: baseOpacity }, NUKE_INDICATOR_PULSE_DURATION / 2).easing(TWEEN.Easing.Quadratic.InOut);
-    tweenForward.chain(tweenBackward); tweenBackward.chain(tweenForward); tweenForward.start();
-    indicatorMesh.userData.tween = tweenForward;
+    // Removed TWEEN pulsing code
     return indicatorMesh;
 }
 function clearNukeIndicators() { nukeIndicatorMeshes.forEach(mesh => disposeMesh(mesh)); nukeIndicatorMeshes = []; }
@@ -768,9 +656,10 @@ function selectNextNukeLocations() {
     if (availableFloorCells.length === 0) return;
     for (let i = availableFloorCells.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [availableFloorCells[i], availableFloorCells[j]] = [availableFloorCells[j], availableFloorCells[i]]; }
     const count = Math.min(NUKES_PER_ROUND, availableFloorCells.length);
-    for (let i = 0; i < count; i++) { const targetPos = availableFloorCells[i]; pendingNukeLocations.push(targetPos); createNukeIndicator3D(targetPos.x, targetPos.y); }
+    for (let i = 0; i < count; i++) { const targetPos = availableFloorCells[i]; pendingNukeLocations.push(targetPos); createNukeIndicator3D(targetPos.x, targetPos.y); } // Create static indicator
     console.log(`Selected ${pendingNukeLocations.length} nuke targets for next round:`, pendingNukeLocations);
 }
+// resolveNukeImpacts (unchanged logic, calls simplified explosion)
 async function resolveNukeImpacts() {
     if (pendingNukeLocations.length === 0) return { impactedLocations: [], hitMessages: [], playerWasHit: false, aiWasHit: false };
     console.log("Resolving nuke impacts...");
@@ -778,40 +667,58 @@ async function resolveNukeImpacts() {
     clearNukeIndicators(); pendingNukeLocations = [];
     currentImpactLocations.forEach(pos => {
         const { x, y } = pos; console.log(` Nuke impacting at ${x},${y}`); const impactPosition3D = get3DPosition(x, y, CELL_3D_SIZE * 0.4);
-        const explosionPromise = new Promise(resolve => { createExplosionEffect(impactPosition3D, nukeExplosionBaseColor, NUKE_EXPLOSION_SCALE_MULTIPLIER, NUKE_EXPLOSION_PARTICLE_MULTIPLIER, resolve, NUKE_EXPLOSION_DURATION_MULTIPLIER); });
+        const explosionPromise = new Promise(resolve => {
+            createExplosionEffect(impactPosition3D, nukeExplosionBaseColor, NUKE_EXPLOSION_SCALE_MULTIPLIER, NUKE_EXPLOSION_PARTICLE_MULTIPLIER, resolve, NUKE_EXPLOSION_DURATION_MULTIPLIER); // Calls simplified explosion
+        });
         impactPromises.push(explosionPromise);
         if (playerPos.x === x && playerPos.y === y) { playerHealth -= NUKE_DAMAGE; playerWasHit = true; hitMessages.push(`Player caught in nuke blast at ${x},${y}!`); }
         if (aiPos.x === x && aiPos.y === y) { aiHealth -= NUKE_DAMAGE; aiWasHit = true; hitMessages.push(`AI caught in nuke blast at ${x},${y}!`); }
         if (isPowerupAt(x, y)) { removePowerup3D(x, y); destroyedFuelCells.push({ x, y }); hitMessages.push(`Fuel cell at ${x},${y} obliterated by nuke.`); }
     });
     await Promise.all(impactPromises); console.log("Nuke explosion visuals complete.");
-    if (playerWasHit || aiWasHit) { updateHealthInfo(); }
+    if (playerWasHit || aiWasHit) { updateHealthInfo(); } // Update UI health
     return { impactedLocations: currentImpactLocations, hitMessages, playerWasHit, aiWasHit };
 }
 
-// --- Missile / Explosion Visual Functions --- (Unchanged)
+// --- Missile / Explosion Visual Functions (Simplified) ---
 function createGuidedMissileVisual(path, missileCoreMaterial, onImpactCallback = null) {
     if (!path || path.length < 2) return;
     const startGridPos = path[0]; const endGridPos = path[path.length - 1];
-    const launchHeight = CELL_3D_SIZE * 0.7; const impactHeight = CELL_3D_SIZE * 0.3; const midHeightBoost = CELL_3D_SIZE * 1.5 * Math.min(1.0, path.length / 5);
+    const launchHeight = CELL_3D_SIZE * 0.5; const impactHeight = CELL_3D_SIZE * 0.2; const midHeightBoost = CELL_3D_SIZE * 0.8 * Math.min(1.0, path.length / 5); // Less arc
     const points3D = path.map((p, index) => { let yOffset = launchHeight + (impactHeight - launchHeight) * (index / (path.length - 1)); const midPointFactor = Math.sin((index / (path.length - 1)) * Math.PI); yOffset += midHeightBoost * midPointFactor; return get3DPosition(p.x, p.y, yOffset); });
     points3D[0] = get3DPosition(startGridPos.x, startGridPos.y, launchHeight); points3D[points3D.length - 1] = get3DPosition(endGridPos.x, endGridPos.y, impactHeight);
-    const curve = new THREE.CatmullRomCurve3(points3D, false, "catmullrom", 0.2);
-    const missileRadius = CELL_3D_SIZE * 0.12; const missileLength = CELL_3D_SIZE * 0.45;
-    const missileGeom = new THREE.ConeGeometry(missileRadius, missileLength, 8); missileGeom.rotateX(Math.PI / 2); missileGeom.translate(0, 0, missileLength / 2);
-    const missileMesh = new THREE.Mesh(missileGeom, missileCoreMaterial.clone()); missileMesh.position.copy(curve.getPointAt(0)); missileMesh.lookAt(curve.getPointAt(0.01)); missileMesh.userData = { type: "missile_object" };
+    const curve = new THREE.CatmullRomCurve3(points3D, false, "catmullrom", 0.5); // Less smooth curve
+
+    // Simple Missile Geometry (Sphere)
+    const missileRadius = CELL_3D_SIZE * 0.15;
+    const missileGeom = new THREE.SphereGeometry(missileRadius, 6, 4); // Low poly sphere
+    const missileMesh = new THREE.Mesh(missileGeom, missileCoreMaterial); // Basic material
+    missileMesh.position.copy(curve.getPointAt(0));
+    missileMesh.lookAt(curve.getPointAt(0.01)); // Still needs to look forward
+    missileMesh.userData = { type: "missile_object" };
     scene.add(missileMesh); activeProjectiles.push({ mesh: missileMesh });
+
+    // Simple Trail (Points)
     const trailGroup = new THREE.Group(); scene.add(trailGroup); activeProjectiles.push({ trail: trailGroup });
-    const trailSpawnInterval = 30; let lastTrailSpawnTime = 0; const trailParticleLifetime = 400;
-    const travelTween = new TWEEN.Tween({ t: 0 }).to({ t: 1 }, MISSILE_TRAVEL_DURATION).easing(TWEEN.Easing.Linear.None)
+    const trailSpawnInterval = 50; let lastTrailSpawnTime = 0; const trailParticleLifetime = 300;
+    const travelTween = new TWEEN.Tween({ t: 0 }).to({ t: 1 }, MISSILE_TRAVEL_DURATION).easing(TWEEN.Easing.Linear.None) // Linear Easing
         .onUpdate((obj) => {
             const currentTime = performance.now(); const currentPoint = curve.getPointAt(obj.t); const tangent = curve.getTangentAt(obj.t).normalize();
             missileMesh.position.copy(currentPoint); const lookAtPoint = currentPoint.clone().add(tangent); missileMesh.lookAt(lookAtPoint);
+
+            // Simplified Trail Spawn
             if (currentTime - lastTrailSpawnTime > trailSpawnInterval && obj.t < 0.98) {
-                lastTrailSpawnTime = currentTime; const particleGeom = new THREE.SphereGeometry(missileRadius * 0.4, 4, 2); const particleMat = missileTrailMaterial.clone(); particleMat.opacity = 0.7;
-                const particle = new THREE.Mesh(particleGeom, particleMat); particle.position.copy(currentPoint).addScaledVector(tangent, -missileLength * 0.6); trailGroup.add(particle);
-                new TWEEN.Tween(particle.material).to({ opacity: 0 }, trailParticleLifetime).easing(TWEEN.Easing.Quadratic.In).start();
-                new TWEEN.Tween(particle.scale).to({ x: 0.01, y: 0.01, z: 0.01 }, trailParticleLifetime).easing(TWEEN.Easing.Quadratic.In).onComplete(() => disposeMesh(particle)).start();
+                lastTrailSpawnTime = currentTime;
+                const particleGeom = new THREE.BufferGeometry(); // Simple point
+                particleGeom.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0], 3));
+                const particleMat = missileTrailMaterial.clone(); // Use basic points material
+                particleMat.opacity = 0.6;
+                const particle = new THREE.Points(particleGeom, particleMat);
+                particle.position.copy(currentPoint).addScaledVector(tangent, -missileRadius * 2); // Behind missile
+                trailGroup.add(particle);
+
+                // Simple fade out
+                new TWEEN.Tween(particle.material).to({ opacity: 0 }, trailParticleLifetime).easing(TWEEN.Easing.Linear.None).onComplete(() => disposeMesh(particle)).start();
             }
         })
         .onComplete(() => {
@@ -821,88 +728,82 @@ function createGuidedMissileVisual(path, missileCoreMaterial, onImpactCallback =
         })
         .start();
 }
+
 function createExplosionEffect(position, baseColor, scaleMultiplier = 1.0, particleMultiplier = 1.0, onCompleteCallback = null, durationMultiplier = 1.0) {
     const explosionGroup = new THREE.Group(); scene.add(explosionGroup);
-    const baseExplosionScale = CELL_3D_SIZE * 1.5; const explosionScale = baseExplosionScale * scaleMultiplier;
-    const baseParticleCount = 150; const particleCount = Math.round(baseParticleCount * particleMultiplier);
+    const baseExplosionScale = CELL_3D_SIZE * 1.0; // Smaller base
+    const explosionScale = baseExplosionScale * scaleMultiplier;
+    const baseParticleCount = 50; // Fewer base particles
+    const particleCount = Math.round(baseParticleCount * particleMultiplier);
     const baseDuration = EXPLOSION_DURATION; const effectDuration = baseDuration * durationMultiplier;
-    let shockwaveMesh, particleSystem, flashLight; let completedComponents = 0; const totalVisualComponents = 3;
-    const checkCleanup = () => { completedComponents++; if (completedComponents >= totalVisualComponents) { disposeMesh(shockwaveMesh); disposeMesh(particleSystem); if (flashLight && flashLight.parent) flashLight.parent.remove(flashLight); if (explosionGroup.parent) explosionGroup.parent.remove(explosionGroup); if (onCompleteCallback) onCompleteCallback(); } };
-    const shockwaveGeom = new THREE.SphereGeometry(explosionScale * 0.1, 32, 16); const shockwaveMat = explosionShockwaveMaterial.clone(); shockwaveMat.color.set(baseColor).lerp(new THREE.Color(0xffffff), 0.7);
+    let shockwaveMesh, particleSystem; let completedComponents = 0; const totalVisualComponents = 2; // Shockwave + Particles only
+
+    const checkCleanup = () => { completedComponents++; if (completedComponents >= totalVisualComponents) { disposeMesh(shockwaveMesh); disposeMesh(particleSystem); if (explosionGroup.parent) explosionGroup.parent.remove(explosionGroup); if (onCompleteCallback) onCompleteCallback(); } };
+
+    // Simple Shockwave (Sphere)
+    const shockwaveGeom = new THREE.SphereGeometry(explosionScale * 0.1, 8, 6); // Low poly sphere
+    const shockwaveMat = explosionShockwaveMaterial.clone(); shockwaveMat.color.set(baseColor);
     shockwaveMesh = new THREE.Mesh(shockwaveGeom, shockwaveMat); shockwaveMesh.position.copy(position); explosionGroup.add(shockwaveMesh);
-    new TWEEN.Tween(shockwaveMesh.scale).to({ x: explosionScale, y: explosionScale, z: explosionScale }, effectDuration * 0.6).easing(TWEEN.Easing.Quadratic.Out).start();
-    new TWEEN.Tween(shockwaveMesh.material).to({ opacity: 0 }, effectDuration * 0.7).easing(TWEEN.Easing.Cubic.In).delay(effectDuration * 0.1).onComplete(checkCleanup).start();
-    const positions = new Float32Array(particleCount * 3); const velocities = []; const colors = new Float32Array(particleCount * 3); const particleBaseColor = baseColor.clone().lerp(new THREE.Color(0xffaa00), 0.5);
+    new TWEEN.Tween(shockwaveMesh.scale).to({ x: explosionScale, y: explosionScale, z: explosionScale }, effectDuration * 0.6).easing(TWEEN.Easing.Linear.None).start();
+    new TWEEN.Tween(shockwaveMesh.material).to({ opacity: 0 }, effectDuration * 0.7).easing(TWEEN.Easing.Linear.None).delay(effectDuration * 0.1).onComplete(checkCleanup).start();
+
+    // Simple Particles (Points)
+    const positions = new Float32Array(particleCount * 3); const velocities = [];
+    // Removed color array - use material color
     for (let i = 0; i < particleCount; i++) {
-        positions[i * 3] = 0; positions[i * 3 + 1] = 0; positions[i * 3 + 2] = 0; const theta = Math.random() * Math.PI * 2; const phi = Math.acos(Math.random() * 2 - 1); const speed = (Math.random() * 0.8 + 0.2) * explosionScale * (1.5 + scaleMultiplier * 0.3);
+        positions[i * 3] = 0; positions[i * 3 + 1] = 0; positions[i * 3 + 2] = 0;
+        const theta = Math.random() * Math.PI * 2; const phi = Math.acos(Math.random() * 2 - 1); const speed = (Math.random() * 0.6 + 0.1) * explosionScale * (1.0 + scaleMultiplier * 0.2); // Slower/less spread
         const velocity = new THREE.Vector3(Math.sin(phi) * Math.cos(theta), Math.sin(phi) * Math.sin(theta), Math.cos(phi)).multiplyScalar(speed); velocities.push(velocity);
-        const initialColor = particleBaseColor.clone().lerp(new THREE.Color(0xffffdd), Math.random() * 0.6); colors[i * 3] = initialColor.r; colors[i * 3 + 1] = initialColor.g; colors[i * 3 + 2] = initialColor.b;
+        // No per-particle color
     }
-    const particleGeom = new THREE.BufferGeometry(); particleGeom.setAttribute("position", new THREE.BufferAttribute(positions, 3)); particleGeom.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    const particleMat = explosionParticleMaterial.clone(); particleMat.size = 0.3 * scaleMultiplier;
+    const particleGeom = new THREE.BufferGeometry(); particleGeom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    // Removed color attribute setting
+    const particleMat = explosionParticleMaterial.clone(); // Basic points material
+    particleMat.size = 0.4 * scaleMultiplier; // Slightly larger points maybe?
+    particleMat.color.set(baseColor).lerp(new THREE.Color(0xffffff), 0.3); // Mix with white slightly
+
     particleSystem = new THREE.Points(particleGeom, particleMat); particleSystem.position.copy(position); explosionGroup.add(particleSystem);
-    const particleTween = new TWEEN.Tween({ t: 0, sizeFactor: 1.0, opacity: 1.0 }).to({ t: 1, sizeFactor: 0.01, opacity: 0.0 }, effectDuration).easing(TWEEN.Easing.Exponential.Out)
+
+    const particleTween = new TWEEN.Tween({ t: 0, opacity: 1.0 }).to({ t: 1, opacity: 0.0 }, effectDuration).easing(TWEEN.Easing.Linear.None) // Linear fade
         .onUpdate((obj) => {
-            const posAttr = particleSystem.geometry.attributes.position; const colAttr = particleSystem.geometry.attributes.color; const easeT = TWEEN.Easing.Quadratic.Out(obj.t);
+            const posAttr = particleSystem.geometry.attributes.position;
+            const easeT = obj.t; // Linear time
             for (let i = 0; i < particleCount; i++) {
-                posAttr.setXYZ(i, velocities[i].x * easeT, velocities[i].y * easeT, velocities[i].z * easeT); const colorProgress = Math.min(1, obj.t * 1.5); const currentColor = new THREE.Color().setRGB(colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]);
-                const targetColor = new THREE.Color(0x551100); currentColor.lerp(targetColor, colorProgress * 0.8); colAttr.setXYZ(i, currentColor.r, currentColor.g, currentColor.b);
+                posAttr.setXYZ(i, velocities[i].x * easeT, velocities[i].y * easeT, velocities[i].z * easeT);
             }
-            if (particleSystem.material) { particleSystem.material.size = obj.sizeFactor * 0.3 * scaleMultiplier; particleSystem.material.opacity = obj.opacity; }
-            if (posAttr) posAttr.needsUpdate = true; if (colAttr) colAttr.needsUpdate = true;
+            if (particleSystem.material) { particleSystem.material.opacity = obj.opacity; }
+            if (posAttr) posAttr.needsUpdate = true;
         })
         .onComplete(checkCleanup).start();
-    flashLight = new THREE.PointLight(baseColor.clone().lerp(new THREE.Color(0xffffff), 0.8), 15.0 * scaleMultiplier * scaleMultiplier, explosionScale * 2.5, 1.5); flashLight.position.copy(position); explosionGroup.add(flashLight);
-    new TWEEN.Tween(flashLight).to({ intensity: 0 }, effectDuration * 0.4).easing(TWEEN.Easing.Quadratic.Out).onComplete(checkCleanup).start();
+
+    // Removed PointLight
 }
 
-// --- Animation Loop (UPDATED for DAMPENERS) ---
-let clock = new THREE.Clock(); // Use clock for time-based animation
+// --- Animation Loop (Simplified) ---
+let clock = new THREE.Clock();
 
 function animate(time) {
     requestAnimationFrame(animate);
-    const delta = clock.getDelta(); // Get time difference
-    const elapsed = clock.getElapsedTime(); // Get total time elapsed
+    // const delta = clock.getDelta(); // Delta not needed without complex physics/rotations
+    const elapsed = clock.getElapsedTime(); // Still useful for some basic variation maybe?
 
     TWEEN.update(time);
     controls.update();
 
-    // Animate powerups
-    powerupMeshes.forEach(p => {
-        if (p.mesh) {
-            p.mesh.rotation.y += (p.mesh.userData.spinSpeed || 0.015) * delta * 60; // Scale by delta
-            p.mesh.rotation.x += (p.mesh.userData.spinSpeed || 0.015) * 0.5 * delta * 60;
-        }
-    });
+    // Removed powerup spinning
+    // Removed heart spinning
+    // Removed dampener pulsing
 
-    // Animate hearts
-    const heartSpinSpeed = 0.5; // Radians per second
-    if (playerHeartsGroup) playerHeartsGroup.rotation.y += heartSpinSpeed * delta;
-    if (aiHeartsGroup) aiHeartsGroup.rotation.y -= heartSpinSpeed * delta;
-
-    // Animate dampener floors
-    dampenerFloorMeshes.forEach(mesh => {
-        if (mesh && mesh.userData) {
-            const originalY = mesh.userData.originalY || -0.11;
-            mesh.position.y = originalY + Math.sin(elapsed * DAMPENER_PULSE_SPEED + mesh.position.x * 0.5) * DAMPENER_PULSE_AMOUNT; // Use elapsed time and position offset for variation
-        }
-    });
-
-
-    composer.render();
+    renderer.render(scene, camera); // Direct render
 }
 
-// --- Input Handling Functions (UPDATED for new pathfinding) ---
+// --- Input Handling Functions (Unchanged Logic) ---
 function handleCanvasMouseMove(event) {
     if (currentPlayer !== "player" || isResolving || gameOverState || currentPlanningMode !== "shoot") {
         if (plannedShootPath || currentHoverPos) {
-            plannedShootPath = null;
-            plannedShootCost = 0;
-            currentHoverPos = null;
-            clearPlanningCostUI();
-            renderHighlights(); // Clear path highlights
-        }
-        return;
+            plannedShootPath = null; plannedShootCost = 0; currentHoverPos = null;
+            clearPlanningCostUI(); renderHighlights();
+        } return;
     }
     updateMouseCoords(event);
     raycaster.setFromCamera(mouse, camera);
@@ -910,35 +811,21 @@ function handleCanvasMouseMove(event) {
     let targetPos = null;
     if (intersects.length > 0) {
         const gridPos = getGridCoords(intersects[0].point);
-        // Can target floor or dampener
-        if (isValid(gridPos.x, gridPos.y) && (grid[gridPos.y][gridPos.x] === "floor" || grid[gridPos.y][gridPos.x] === "dampener")) {
-            targetPos = gridPos;
-        }
+        if (isValid(gridPos.x, gridPos.y) && (grid[gridPos.y][gridPos.x] === "floor" || grid[gridPos.y][gridPos.x] === "dampener")) { targetPos = gridPos; }
     }
     const hoverChanged = !currentHoverPos || !targetPos || currentHoverPos.x !== targetPos.x || currentHoverPos.y !== targetPos.y;
     if (hoverChanged) {
         currentHoverPos = targetPos ? { ...targetPos } : null;
         if (targetPos && !(targetPos.x === playerPos.x && targetPos.y === playerPos.y)) {
-            // Use the UPDATED pathfinding function
-            const result = findShortestMissilePath(playerPos, targetPos, [aiPos]);
-            if (result) {
-                plannedShootPath = result.path;
-                plannedShootCost = result.cost;
-                setMessage(`Target: ${targetPos.x},${targetPos.y}. Est. Cost: ${result.cost} (Dampeners cost ${DAMPENER_MOVE_COST})`);
-            } else {
-                plannedShootPath = null;
-                plannedShootCost = 0;
-                setMessage(`Cannot reach target ${targetPos.x},${targetPos.y}.`);
-            }
+            const result = findShortestMissilePath(playerPos, targetPos, [aiPos]); // Uses UCS pathfinding
+            if (result) { plannedShootPath = result.path; plannedShootCost = result.cost; setMessage(`Target: ${targetPos.x},${targetPos.y}. Cost: ${result.cost}`); }
+            else { plannedShootPath = null; plannedShootCost = 0; setMessage(`Cannot reach target ${targetPos.x},${targetPos.y}.`); }
         } else {
-            plannedShootPath = null;
-            plannedShootCost = 0;
-            setMessage(`Your Turn (Fuel: ${playerFuel}): Hover over a floor/dampener tile to target missile.`);
+            plannedShootPath = null; plannedShootCost = 0; setMessage(`Your Turn (Fuel: ${playerFuel}): Hover to target.`);
         }
-        renderHighlights(); // Update path highlights
+        renderHighlights();
     }
 }
-
 function handleCanvasClick(event) {
     if (currentPlayer !== "player" || isResolving || gameOverState) return;
     updateMouseCoords(event);
@@ -949,26 +836,19 @@ function handleCanvasClick(event) {
         if (isValid(clickedGridPos.x, clickedGridPos.y)) {
             const cellType = grid[clickedGridPos.y][clickedGridPos.x];
             const isWalkable = cellType === "floor" || cellType === "dampener";
-
             if (currentPlanningMode === "move") {
-                if (isWalkable) {
-                    handleMoveInput(clickedGridPos.x, clickedGridPos.y);
-                } else { setMessage("Invalid move click: Must click on a floor or dampener tile."); }
+                if (isWalkable) { handleMoveInput(clickedGridPos.x, clickedGridPos.y); }
+                else { setMessage("Invalid move: Click floor/dampener."); }
             } else if (currentPlanningMode === "shoot") {
                 if (isWalkable && plannedShootPath && plannedShootPath.length > 0 && plannedShootPath[plannedShootPath.length - 1].x === clickedGridPos.x && plannedShootPath[plannedShootPath.length - 1].y === clickedGridPos.y) {
                     const cost = plannedShootCost;
-                    if (cost <= playerFuel) {
-                        const action = { type: "shoot", target: clickedGridPos, _path: plannedShootPath, _cost: cost };
-                        executeAction(action);
-                    } else { setMessage(`Not enough fuel! Cost: ${cost}, Available: ${playerFuel}`); }
-                } else if (isWalkable) {
-                     setMessage("Invalid target click. Hover over a valid destination first to see the path and cost.");
-                } else {
-                    setMessage("Invalid click: Target must be a floor or dampener tile.");
-                }
+                    if (cost <= playerFuel) { const action = { type: "shoot", target: clickedGridPos, _path: plannedShootPath, _cost: cost }; executeAction(action); }
+                    else { setMessage(`Need ${cost} fuel, have ${playerFuel}.`); }
+                } else if (isWalkable) { setMessage("Invalid target. Hover first."); }
+                else { setMessage("Invalid click: Target floor/dampener."); }
             }
-        } else { setMessage("Invalid click: Click within the grid boundaries."); }
-    } else { setMessage("Invalid click: Click within the grid area."); }
+        } else { setMessage("Click inside grid."); }
+    } else { setMessage("Click inside grid area."); }
 }
 function updateMouseCoords(event) {
     const rect = canvasContainer.getBoundingClientRect();
@@ -976,8 +856,7 @@ function updateMouseCoords(event) {
     mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 }
 
-
-// --- UI Update Functions --- (Unchanged)
+// --- UI Update Functions ---
 function setMessage(msg) { messageArea.textContent = msg; }
 function updatePhaseIndicator() {
     let phaseText = "Unknown";
@@ -985,19 +864,18 @@ function updatePhaseIndicator() {
     else if (isResolving) { phaseText = `Executing ${currentPlayer}'s Action...`; }
     else if (currentPlayer === "player") { phaseText = "Your Turn"; }
     else if (currentPlayer === "ai") { phaseText = "AI Turn"; }
-    phaseIndicator.textContent = phaseText;
+    phaseIndicator.textContent = "Phase: " + phaseText; // Simpler text
 }
-function updateFuelInfo() { playerFuelInfo.textContent = `Your Fuel: ${playerFuel}`; aiFuelInfo.textContent = `AI Fuel: ${aiFuel}`; }
+function updateFuelInfo() { playerFuelInfo.textContent = `Player Fuel: ${playerFuel}`; aiFuelInfo.textContent = `AI Fuel: ${aiFuel}`; }
 function updateHealthInfo() {
-    playerHealthInfo.textContent = `Your Health: ${playerHealth} / ${INITIAL_HEALTH}`;
+    playerHealthInfo.textContent = `Player Health: ${playerHealth} / ${INITIAL_HEALTH}`;
     aiHealthInfo.textContent = `AI Health: ${aiHealth} / ${INITIAL_HEALTH}`;
-    updateHealthVisuals(playerHealth, playerHeartsGroup);
-    updateHealthVisuals(aiHealth, aiHeartsGroup);
+    // Removed updateHealthVisuals calls
 }
 function updatePlanningCostUI(cost, available) {
     if (cost > 0) {
-        planFuelCostInfo.textContent = `Est. Fuel Cost: ${cost} / Avail: ${available}`;
-        planFuelCostInfo.style.color = cost <= available ? 'lightgreen' : 'salmon';
+        planFuelCostInfo.textContent = `Cost: ${cost} / ${available}`;
+        planFuelCostInfo.style.color = cost <= available ? 'green' : 'red'; // Simpler colors
         planFuelCostInfo.style.fontWeight = 'bold';
     } else { planFuelCostInfo.textContent = ''; planFuelCostInfo.style.fontWeight = 'normal'; }
 }
@@ -1014,15 +892,15 @@ function disablePlanningControls() {
 }
 
 
-// --- Planning Phase Logic Functions (Player Only) --- (Unchanged)
+// --- Planning Phase Logic Functions (Player Only - Unchanged Logic) ---
 function setPlanningMode(mode) {
     if (currentPlayer !== "player" || isResolving || gameOverState) return;
     currentPlanningMode = mode;
     plannedShootPath = null; plannedShootCost = 0; currentHoverPos = null;
     clearPlanningCostUI();
     btnPlanMove.classList.toggle("active", mode === "move"); btnPlanShoot.classList.toggle("active", mode === "shoot");
-    if (mode === "move") { setMessage("Your Turn: Click an adjacent floor/dampener cell to move."); }
-    else if (mode === "shoot") { setMessage(`Your Turn (Fuel: ${playerFuel}): Hover over a floor/dampener tile to target missile.`); }
+    if (mode === "move") { setMessage("Click adjacent floor/dampener to move."); }
+    else if (mode === "shoot") { setMessage(`Hover floor/dampener to target missile (Fuel: ${playerFuel}).`); }
     renderHighlights();
 }
 function handleMoveInput(targetX, targetY) {
@@ -1033,196 +911,98 @@ function handleMoveInput(targetX, targetY) {
         const action = { type: "move", target: { x: targetX, y: targetY } };
         executeAction(action);
     } else {
-        setMessage("Invalid move target. Click a highlighted adjacent square.");
+        setMessage("Invalid move. Click highlighted adjacent.");
     }
 }
 
-
-// --- ============================================== ---
-// --- Pathfinding Logic (UPDATED for Dampener Cost) ---
-// --- ============================================== ---
-
-/**
- * Finds the shortest path for a missile using UCS (Uniform Cost Search).
- * Considers variable movement cost: BASE_MOVE_COST for normal floors, DAMPENER_MOVE_COST for dampener floors.
- * NO turn penalty is applied.
- * @param {object} startPos - {x, y} starting position.
- * @param {object} targetPos - {x, y} target position.
- * @param {Array<object>} opponentBlockers - Array of {x, y} positions blocked by opponents (usually just one).
- * @returns {object|null} - { path: Array<{x, y}>, cost: number } or null if not reachable.
- */
+// --- Pathfinding Logic (UCS - UNCHANGED LOGIC, CRITICAL FOR GAMEPLAY) ---
 function findShortestMissilePath(startPos, targetPos, opponentBlockers = []) {
-    const priorityQueue = []; // Stores [cost, state]
-    const startState = { pos: startPos, path: [startPos], cost: 0 };
+    const priorityQueue = []; const startState = { pos: startPos, path: [startPos], cost: 0 };
     priorityQueue.push([0, startState]);
-
-    // Stores the minimum cost found so far to reach a cell { "x,y": cost }
     const minCostToCell = { [`${startPos.x},${startPos.y}`]: 0 };
-
     const blockerSet = new Set(opponentBlockers.map(p => `${p.x},${p.y}`));
-
     while (priorityQueue.length > 0) {
-        // Get the state with the lowest cost
         priorityQueue.sort((a, b) => a[0] - b[0]);
         const [currentCost, currentState] = priorityQueue.shift();
         const currentCellKey = `${currentState.pos.x},${currentState.pos.y}`;
-
-        // If we've already found a cheaper path to this cell, skip
-        if (currentCost > (minCostToCell[currentCellKey] ?? Infinity)) {
-            continue;
-        }
-
-        // Goal check
-        if (currentState.pos.x === targetPos.x && currentState.pos.y === targetPos.y) {
-            return { path: currentState.path, cost: currentState.cost };
-        }
-
-        // Explore neighbors
+        if (currentCost > (minCostToCell[currentCellKey] ?? Infinity)) { continue; }
+        if (currentState.pos.x === targetPos.x && currentState.pos.y === targetPos.y) { return { path: currentState.path, cost: currentState.cost }; }
         const directions = [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }];
         for (const moveDir of directions) {
             const neighborPos = { x: currentState.pos.x + moveDir.dx, y: currentState.pos.y + moveDir.dy };
-
-            // Check validity: within bounds, not a wall
-            if (!isValid(neighborPos.x, neighborPos.y) || isWall(neighborPos.x, neighborPos.y)) {
-                continue;
-            }
-
+            if (!isValid(neighborPos.x, neighborPos.y) || isWall(neighborPos.x, neighborPos.y)) { continue; }
             const neighborKey = `${neighborPos.x},${neighborPos.y}`;
-
-            // Check validity: not blocked by opponent (unless it's the target itself)
-            if (blockerSet.has(neighborKey) && (neighborPos.x !== targetPos.x || neighborPos.y !== targetPos.y)) {
-                continue;
-            }
-
-            // Determine the cost to move to this neighbor
+            if (blockerSet.has(neighborKey) && (neighborPos.x !== targetPos.x || neighborPos.y !== targetPos.y)) { continue; }
             const cellType = grid[neighborPos.y][neighborPos.x];
-            let stepCost = BASE_MOVE_COST; // Default cost
-            if (cellType === "dampener") {
-                stepCost = DAMPENER_MOVE_COST;
-            }
-            // NO turn penalty: TURN_PENALTY is 0
-
+            let stepCost = BASE_MOVE_COST; if (cellType === "dampener") { stepCost = DAMPENER_MOVE_COST; }
             const newCost = currentCost + stepCost;
-
-            // If this path is cheaper than any previous path to the neighbor
             if (newCost < (minCostToCell[neighborKey] ?? Infinity)) {
-                minCostToCell[neighborKey] = newCost; // Update minimum cost
-                const newState = {
-                    pos: neighborPos,
-                    path: [...currentState.path, neighborPos],
-                    cost: newCost
-                };
-                priorityQueue.push([newCost, newState]); // Add to queue
+                minCostToCell[neighborKey] = newCost; const newState = { pos: neighborPos, path: [...currentState.path, neighborPos], cost: newCost };
+                priorityQueue.push([newCost, newState]);
             }
         }
     }
-
     return null; // Target not reachable
 }
 
 
-// --- AI Logic (UPDATED for new pathfinding) ---
+// --- AI Logic (UNCHANGED LOGIC - Uses updated pathfinding) ---
 function findBestActionUCSBased() {
-    // console.log("AI considering path costs including dampeners...");
     const startTime = performance.now();
-
-    // 1. Check for Lethal Shot (uses updated pathfinding)
     let lethalShotAction = null;
     if (playerHealth <= 1) {
-        const shootPathResult = findShortestMissilePath(aiPos, playerPos, []); // Use new function
+        const shootPathResult = findShortestMissilePath(aiPos, playerPos, []);
         if (shootPathResult && shootPathResult.cost <= aiFuel) {
             lethalShotAction = { type: "shoot", target: playerPos, _path: shootPathResult.path, _cost: shootPathResult.cost };
-            console.log(`AI Decision: Lethal Shot Found. Cost: ${shootPathResult.cost}, Fuel: ${aiFuel}.`);
-            const endTime = performance.now(); console.log(`AI decision took ${(endTime - startTime).toFixed(2)} ms.`);
-            return lethalShotAction;
+            console.log(`AI: Lethal Shot. Cost: ${shootPathResult.cost}.`); const endTime = performance.now(); console.log(`AI decision took ${(endTime - startTime).toFixed(2)} ms.`); return lethalShotAction;
         }
     }
-
-    // 2. Check for any possible shot (uses updated pathfinding)
     let possibleShotAction = null;
-    const shootPathResult = findShortestMissilePath(aiPos, playerPos, []); // Use new function
-    if (shootPathResult && shootPathResult.cost <= aiFuel) {
-        possibleShotAction = { type: "shoot", target: playerPos, _path: shootPathResult.path, _cost: shootPathResult.cost };
-        // console.log(`AI Decision: Non-lethal Shot Possible. Cost: ${shootPathResult.cost}, Fuel: ${aiFuel}.`);
-    }
-
-    // 3. Find nearest reachable fuel cell (uses simple BFS, cost doesn't matter here, only reachability)
+    const shootPathResult = findShortestMissilePath(aiPos, playerPos, []);
+    if (shootPathResult && shootPathResult.cost <= aiFuel) { possibleShotAction = { type: "shoot", target: playerPos, _path: shootPathResult.path, _cost: shootPathResult.cost }; }
     const availableUpgrades = [...powerUpPositions];
-    let shortestMovePathToUpgrade = null;
-    let bestTargetUpgrade = null;
+    let shortestMovePathToUpgrade = null; let bestTargetUpgrade = null;
     availableUpgrades.sort((a, b) => distance(aiPos, a) - distance(aiPos, b));
     for (const upgradePos of availableUpgrades) {
-        const upgradePath = findShortestPath_SimpleBFS(aiPos, upgradePos, [playerPos]); // Simple BFS is fine for movement targetting
+        const upgradePath = findShortestPath_SimpleBFS(aiPos, upgradePos, [playerPos]);
         if (upgradePath && upgradePath.length > 1) {
-            if (!shortestMovePathToUpgrade || upgradePath.length < shortestMovePathToUpgrade.length) {
-                shortestMovePathToUpgrade = upgradePath;
-                bestTargetUpgrade = upgradePos;
-            }
+            if (!shortestMovePathToUpgrade || upgradePath.length < shortestMovePathToUpgrade.length) { shortestMovePathToUpgrade = upgradePath; bestTargetUpgrade = upgradePos; }
         }
     }
-
-    // --- AI Decision Logic ---
-    // Prioritize fuel if low or cannot afford shot + next fuel
     if (shortestMovePathToUpgrade && (aiFuel < 5 || !possibleShotAction || aiFuel < (possibleShotAction?._cost ?? Infinity) + FUEL_PER_UPGRADE)) {
-        const nextStep = shortestMovePathToUpgrade[1];
-        console.log(`AI Decision: Moving towards fuel at ${bestTargetUpgrade.x},${bestTargetUpgrade.y}. Step: ${nextStep.x},${nextStep.y}`);
-        const endTime = performance.now(); console.log(`AI decision took ${(endTime - startTime).toFixed(2)} ms.`);
-        return { type: "move", target: nextStep };
+        const nextStep = shortestMovePathToUpgrade[1]; console.log(`AI: Move to fuel @ ${bestTargetUpgrade.x},${bestTargetUpgrade.y}. Step: ${nextStep.x},${nextStep.y}`); const endTime = performance.now(); console.log(`AI decision took ${(endTime - startTime).toFixed(2)} ms.`); return { type: "move", target: nextStep };
     }
-    // If shot possible and fuel decent, take it
     if (possibleShotAction) {
-        console.log(`AI Decision: Taking available shot (Cost: ${possibleShotAction._cost}).`);
-        const endTime = performance.now(); console.log(`AI decision took ${(endTime - startTime).toFixed(2)} ms.`);
-        return possibleShotAction;
+        console.log(`AI: Shooting (Cost: ${possibleShotAction._cost}).`); const endTime = performance.now(); console.log(`AI decision took ${(endTime - startTime).toFixed(2)} ms.`); return possibleShotAction;
     }
-    // Fallback: Move towards fuel if possible
     if (shortestMovePathToUpgrade) {
-        const nextStep = shortestMovePathToUpgrade[1];
-        console.log(`AI Decision (Fallback): Moving towards fuel at ${bestTargetUpgrade.x},${bestTargetUpgrade.y}. Step: ${nextStep.x},${nextStep.y}`);
-        const endTime = performance.now(); console.log(`AI decision took ${(endTime - startTime).toFixed(2)} ms.`);
-        return { type: "move", target: nextStep };
+        const nextStep = shortestMovePathToUpgrade[1]; console.log(`AI (Fallback): Move to fuel @ ${bestTargetUpgrade.x},${bestTargetUpgrade.y}. Step: ${nextStep.x},${nextStep.y}`); const endTime = performance.now(); console.log(`AI decision took ${(endTime - startTime).toFixed(2)} ms.`); return { type: "move", target: nextStep };
     }
-    // If nothing else, stay put
-    console.log("AI Decision: No viable shots or fuel moves. Staying put.");
-    const endTime = performance.now(); console.log(`AI decision took ${(endTime - startTime).toFixed(2)} ms.`);
-    return { type: "stay" };
+    console.log("AI: Staying put."); const endTime = performance.now(); console.log(`AI decision took ${(endTime - startTime).toFixed(2)} ms.`); return { type: "stay" };
 }
-
-// --- Simple BFS for basic reachability (Unchanged - suitable for 'can I get there?') ---
+// Simple BFS (Unchanged)
 function findShortestPath_SimpleBFS(startPos, targetPos, opponentBlockers = []) {
-    const q = [{ pos: startPos, path: [startPos] }];
-    const visited = new Set([`${startPos.x},${startPos.y}`]);
-    const blockerSet = new Set(opponentBlockers.map(p => `${p.x},${p.y}`));
+    const q = [{ pos: startPos, path: [startPos] }]; const visited = new Set([`${startPos.x},${startPos.y}`]); const blockerSet = new Set(opponentBlockers.map(p => `${p.x},${p.y}`));
     while (q.length > 0) {
-        const { pos, path } = q.shift();
-        if (pos.x === targetPos.x && pos.y === targetPos.y) return path;
-        const neighbors = getValidMoves(pos, { x: -1, y: -1 }); // Get adjacent walkable tiles
-        for (const neighbor of neighbors) {
-            const key = `${neighbor.x},${neighbor.y}`;
-            // Can path through opponent *if* it's the target cell itself
-            if (!visited.has(key) && !(blockerSet.has(key) && (neighbor.x !== targetPos.x || neighbor.y !== targetPos.y))) {
-                visited.add(key);
-                q.push({ pos: neighbor, path: [...path, neighbor] });
-            }
-        }
-    }
-    return null; // Target not reachable
+        const { pos, path } = q.shift(); if (pos.x === targetPos.x && pos.y === targetPos.y) return path;
+        const neighbors = getValidMoves(pos, { x: -1, y: -1 });
+        for (const neighbor of neighbors) { const key = `${neighbor.x},${neighbor.y}`; if (!visited.has(key) && !(blockerSet.has(key) && (neighbor.x !== targetPos.x || neighbor.y !== targetPos.y))) { visited.add(key); q.push({ pos: neighbor, path: [...path, neighbor] }); } }
+    } return null;
 }
 
 
-// --- AI Trigger --- (Unchanged)
+// --- AI Trigger (Unchanged) ---
 function triggerAiTurn() {
-    disablePlanningControls(); // Ensure controls disabled before thinking starts
+    disablePlanningControls();
     setTimeout(() => {
         if (gameOverState) return;
-        const aiAction = findBestActionUCSBased(); // Uses updated pathfinding internally
-        if (!aiAction) { console.error("AI failed to find ANY action (even 'stay')!"); executeAction({ type: "stay" }); return; }
+        const aiAction = findBestActionUCSBased();
+        if (!aiAction) { console.error("AI failed to find ANY action!"); executeAction({ type: "stay" }); return; }
         executeAction(aiAction);
     }, AI_THINK_DELAY);
 }
 
-
-// --- Action Execution & Turn Management --- (Unchanged - Relies on correct path/cost from planner/AI)
+// --- Action Execution & Turn Management (Unchanged Logic, Calls Simplified Visuals) ---
 async function executeAction(action) {
     if (isResolving || gameOverState) return;
     console.log(`Executing ${currentPlayer}'s action:`, action);
@@ -1236,16 +1016,16 @@ async function executeAction(action) {
 
     if (action.type === "move") {
         if (action.target.x === opponentPos.x && action.target.y === opponentPos.y) {
-            actionMessageLog.push(`${activePlayer.toUpperCase()} move blocked by opponent!`); actionSuccess = false; await wait(ACTION_RESOLVE_DELAY);
+            actionMessageLog.push(`${activePlayer.toUpperCase()} move blocked!`); actionSuccess = false; await wait(ACTION_RESOLVE_DELAY);
         } else {
-            await animateMove(activePlayerMesh, action.target);
+            await animateMove(activePlayerMesh, action.target); // Calls simplified move animation
             activePlayerPosRef.x = action.target.x; activePlayerPosRef.y = action.target.y;
             actionMessageLog.push(`${activePlayer.toUpperCase()} moved to ${action.target.x},${action.target.y}.`);
             const powerupIndex = powerUpPositions.findIndex(p => p.x === activePlayerPosRef.x && p.y === activePlayerPosRef.y);
             if (powerupIndex !== -1) {
                 collectedPowerup = true; const collectedPos = powerUpPositions[powerupIndex]; removePowerup3D(collectedPos.x, collectedPos.y);
-                if (activePlayer === "player") { playerFuel += FUEL_PER_UPGRADE; actionMessageLog.push(`Collected fuel cell! (+${FUEL_PER_UPGRADE} Fuel, Total: ${playerFuel})`); }
-                else { aiFuel += FUEL_PER_UPGRADE; actionMessageLog.push(`Collected fuel cell! (+${FUEL_PER_UPGRADE} Fuel, Total: ${aiFuel})`); }
+                if (activePlayer === "player") { playerFuel += FUEL_PER_UPGRADE; actionMessageLog.push(`Got fuel! (+${FUEL_PER_UPGRADE} Fuel=${playerFuel})`); }
+                else { aiFuel += FUEL_PER_UPGRADE; actionMessageLog.push(`Got fuel! (+${FUEL_PER_UPGRADE} Fuel=${aiFuel})`); }
                 updateFuelInfo();
             }
         }
@@ -1253,102 +1033,112 @@ async function executeAction(action) {
         const path = action._path; const cost = action._cost; let currentFuel = activePlayer === "player" ? playerFuel : aiFuel;
         if (path && path.length > 1 && cost <= currentFuel) {
             if (activePlayer === "player") playerFuel -= cost; else aiFuel -= cost;
-            updateFuelInfo(); actionMessageLog.push(`${activePlayer.toUpperCase()} missile launched (Cost: ${cost}).`);
+            updateFuelInfo(); actionMessageLog.push(`${activePlayer.toUpperCase()} missile launch (Cost: ${cost}).`);
             const targetPos = path[path.length - 1]; let explosionCompletePromise = null;
-            await new Promise(resolveMissileImpact => { createGuidedMissileVisual(path, missileCoreMaterial, resolveMissileImpact); });
+            await new Promise(resolveMissileImpact => { createGuidedMissileVisual(path, missileCoreMaterial, resolveMissileImpact); }); // Simplified visual
             const targetX = targetPos.x; const targetY = targetPos.y;
             if (isPowerupAt(targetX, targetY)) {
-                actionMessageLog.push(`Missile hit a fuel cell at ${targetX},${targetY}!`);
-                explosionCompletePromise = triggerFuelChainExplosion(targetX, targetY); const destroyedCoords = await explosionCompletePromise;
+                actionMessageLog.push(`Missile hit fuel cell at ${targetX},${targetY}!`);
+                explosionCompletePromise = triggerFuelChainExplosion(targetX, targetY); // Simplified explosions internally
+                const destroyedCoords = await explosionCompletePromise;
                 if (destroyedCoords.length > 0) { actionMessageLog.push(`Chain reaction destroyed ${destroyedCoords.length} fuel cell(s).`); }
                 wasHit = false;
             } else {
-                const impactPosition3D = get3DPosition(targetX, targetY, CELL_3D_SIZE * 0.3);
-                explosionCompletePromise = new Promise(resolveExplosion => { createExplosionEffect(impactPosition3D, missileCoreMaterial.color, 1.0, 1.0, resolveExplosion); });
-                if (targetX === opponentPos.x && targetY === opponentPos.y) { wasHit = true; hitPlayer = activePlayer === "player" ? "ai" : "player"; actionMessageLog.push(`${hitPlayer.toUpperCase()} was hit!`); }
-                else { actionMessageLog.push(`Missile impacted floor at ${targetX},${targetY}.`); }
+                const impactPosition3D = get3DPosition(targetX, targetY, CELL_3D_SIZE * 0.1); // Lower impact point
+                explosionCompletePromise = new Promise(resolveExplosion => { createExplosionEffect(impactPosition3D, missileCoreMaterial.color, 1.0, 1.0, resolveExplosion); }); // Simplified explosion
+                if (targetX === opponentPos.x && targetY === opponentPos.y) { wasHit = true; hitPlayer = activePlayer === "player" ? "ai" : "player"; actionMessageLog.push(`${hitPlayer.toUpperCase()} HIT!`); }
+                else { actionMessageLog.push(`Missile hit floor at ${targetX},${targetY}.`); }
                 await explosionCompletePromise;
             }
             updateFuelInfo();
-        } else { actionMessageLog.push(`${activePlayer.toUpperCase()} missile fizzled! (Check fuel/path).`); actionSuccess = false; wasHit = false; await wait(ACTION_RESOLVE_DELAY); }
-    } else if (action.type === "stay") { actionMessageLog.push(`${activePlayer.toUpperCase()} did not move.`); await wait(ACTION_RESOLVE_DELAY); }
-    setMessage(actionMessageLog.join(" "));
+        } else { actionMessageLog.push(`${activePlayer.toUpperCase()} missile fizzled!`); actionSuccess = false; wasHit = false; await wait(ACTION_RESOLVE_DELAY); }
+    } else if (action.type === "stay") { actionMessageLog.push(`${activePlayer.toUpperCase()} waits.`); await wait(ACTION_RESOLVE_DELAY); }
+
     if (wasHit && hitPlayer) {
         if (hitPlayer === 'player') playerHealth--; else aiHealth--;
-        actionMessageLog.push(`${hitPlayer.toUpperCase()} health reduced to ${hitPlayer === 'player' ? playerHealth : aiHealth}.`);
-        updateHealthInfo();
-        if (playerHealth <= 0) { setMessage(actionMessageLog.join(" ")); endGame("AI Wins! Player eliminated.", "ai"); return; }
-        else if (aiHealth <= 0) { setMessage(actionMessageLog.join(" ")); endGame("Player Wins! AI eliminated.", "player"); return; }
+        actionMessageLog.push(`${hitPlayer.toUpperCase()} health ${hitPlayer === 'player' ? playerHealth : aiHealth}.`);
+        updateHealthInfo(); // Update UI health
+        if (playerHealth <= 0) { setMessage(actionMessageLog.join(" ")); endGame("AI Wins!", "ai"); return; }
+        else if (aiHealth <= 0) { setMessage(actionMessageLog.join(" ")); endGame("Player Wins!", "player"); return; }
     }
     setMessage(actionMessageLog.join(" "));
+
     let nukeMessages = [];
-    if (!gameOverState && activePlayer === 'ai') {
-        setMessage("Resolving incoming nuke impacts..."); updatePhaseIndicator(); await wait(ACTION_RESOLVE_DELAY);
-        const nukeResult = await resolveNukeImpacts();
+    if (!gameOverState && activePlayer === 'ai') { // Nukes resolve after AI turn
+        setMessage("Nuke Impact..."); updatePhaseIndicator(); await wait(ACTION_RESOLVE_DELAY);
+        const nukeResult = await resolveNukeImpacts(); // Calls simplified explosion visuals
         if (nukeResult && nukeResult.hitMessages.length > 0) {
-            nukeMessages = nukeResult.hitMessages; setMessage(nukeMessages.join(" ")); await wait(ACTION_RESOLVE_DELAY * 2);
+            nukeMessages = nukeResult.hitMessages; setMessage(nukeMessages.join(" ")); await wait(ACTION_RESOLVE_DELAY * 1.5);
         } else { await wait(ACTION_RESOLVE_DELAY / 2); }
-        if (playerHealth <= 0) { endGame("Player eliminated by nuke impact! AI Wins!", "ai"); return; }
-        if (aiHealth <= 0) { endGame("AI eliminated by nuke impact! Player Wins!", "player"); return; }
+        if (playerHealth <= 0) { endGame("Player nuked! AI Wins!", "ai"); return; }
+        if (aiHealth <= 0) { endGame("AI nuked! Player Wins!", "player"); return; }
     }
+
     if (!gameOverState) {
         currentPlayer = activePlayer === "player" ? "ai" : "player"; gamePhase = currentPlayer + "Turn";
-        if (activePlayer === 'ai') { spawnRandomPowerup(); selectNextNukeLocations(); }
+        if (activePlayer === 'ai') { // Spawn powerup & select nukes AFTER AI turn resolves
+             spawnRandomPowerup();
+             selectNextNukeLocations(); // Show indicators for player's turn
+        }
         isResolving = false;
         await wait(ACTION_RESOLVE_DELAY / 2);
-        if (currentPlayer === "ai") { setMessage("AI is thinking..."); updatePhaseIndicator(); triggerAiTurn(); }
-        else { setMessage("Your Turn: Plan your action. Check nuke indicators!"); updatePhaseIndicator(); enablePlanningControls(); setPlanningMode("move"); }
+        if (currentPlayer === "ai") { setMessage("AI thinking..."); updatePhaseIndicator(); triggerAiTurn(); }
+        else { setMessage("Your Turn. Nuke indicators active!"); updatePhaseIndicator(); enablePlanningControls(); setPlanningMode("move"); }
     } else { isResolving = false; }
 }
 
-// --- Fuel Cell Explosion Logic --- (Unchanged)
+// --- Fuel Cell Explosion Logic (Unchanged Logic, Calls Simplified Explosion) ---
 async function triggerFuelChainExplosion(startX, startY) {
     const explosionQueue = [{ x: startX, y: startY }]; const explodedThisTurn = new Set([`${startX},${startY}`]); const destroyedThisTurn = new Set(); const visualCompletionPromises = [];
     while (explosionQueue.length > 0) {
         const { x: currentX, y: currentY } = explosionQueue.shift(); const currentKey = `${currentX},${currentY}`;
         if (!isPowerupAt(currentX, currentY) || destroyedThisTurn.has(currentKey)) continue;
-        destroyedThisTurn.add(currentKey); const pos3D = get3DPosition(currentX, currentY, CELL_3D_SIZE * 0.3);
-        const visualPromise = new Promise(resolve => { createExplosionEffect(pos3D, powerupMaterial.color, FUEL_EXPLOSION_SCALE_MULTIPLIER, FUEL_EXPLOSION_PARTICLE_MULTIPLIER, resolve); });
+        destroyedThisTurn.add(currentKey); const pos3D = get3DPosition(currentX, currentY, CELL_3D_SIZE * 0.1); // Lower explosion point
+        const visualPromise = new Promise(resolve => { createExplosionEffect(pos3D, powerupMaterial.color, FUEL_EXPLOSION_SCALE_MULTIPLIER, FUEL_EXPLOSION_PARTICLE_MULTIPLIER, resolve); }); // Simplified explosion
         visualCompletionPromises.push(visualPromise);
-        for (let dx = -FUEL_EXPLOSION_RADIUS; dx <= FUEL_EXPLOSION_RADIUS; dx++) { for (let dy = -FUEL_EXPLOSION_RADIUS; dy <= FUEL_EXPLOSION_RADIUS; dy++) { if (Math.abs(dx) + Math.abs(dy) > FUEL_EXPLOSION_RADIUS || (dx === 0 && dy === 0)) continue; const nearbyX = currentX + dx; const nearbyY = currentY + dy; const nearbyKey = `${nearbyX},${nearbyY}`; if (isValid(nearbyX, nearbyY) && isPowerupAt(nearbyX, nearbyY) && !destroyedThisTurn.has(nearbyKey)) { destroyedThisTurn.add(nearbyKey); } } }
+        for (let dx = -FUEL_EXPLOSION_RADIUS; dx <= FUEL_EXPLOSION_RADIUS; dx++) { for (let dy = -FUEL_EXPLOSION_RADIUS; dy <= FUEL_EXPLOSION_RADIUS; dy++) { if (Math.abs(dx) + Math.abs(dy) > FUEL_EXPLOSION_RADIUS || (dx === 0 && dy === 0)) continue; const nearbyX = currentX + dx; const nearbyY = currentY + dy; const nearbyKey = `${nearbyX},${nearbyY}`; if (isValid(nearbyX, nearbyY) && isPowerupAt(nearbyX, nearbyY) && !destroyedThisTurn.has(nearbyKey)) { destroyedThisTurn.add(nearbyKey); } } } // Mark nearby for destruction? Check this logic - seems okay, it marks them but doesn't add to queue unless adjacent below
         const directions = [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }];
         for (const dir of directions) { const adjX = currentX + dir.dx; const adjY = currentY + dir.dy; const adjKey = `${adjX},${adjY}`; if (isValid(adjX, adjY) && isPowerupAt(adjX, adjY) && !explodedThisTurn.has(adjKey)) { explodedThisTurn.add(adjKey); explosionQueue.push({ x: adjX, y: adjY }); } }
     }
     await Promise.all(visualCompletionPromises);
-    const destroyedCoordsList = []; destroyedThisTurn.forEach(key => { const [x, y] = key.split(',').map(Number); if (isPowerupAt(x, y)) { removePowerup3D(x, y); destroyedCoordsList.push({ x, y }); } });
-    console.log(`Fuel chain reaction finished. Destroyed cells: ${destroyedCoordsList.length}`);
+    const destroyedCoordsList = []; destroyedThisTurn.forEach(key => { const [x, y] = key.split(',').map(Number); if (isPowerupAt(x, y)) { removePowerup3D(x, y); destroyedCoordsList.push({ x, y }); } }); // Remove AFTER visuals
+    console.log(`Fuel chain reaction: Destroyed ${destroyedCoordsList.length}`);
     return destroyedCoordsList;
 }
 
 
-// --- Animate Move Function --- (Unchanged)
+// --- Animate Move Function (Simplified Easing) ---
 function animateMove(mesh, targetGridPos) {
     return new Promise((resolve) => {
         const startPos3D = mesh.position.clone();
-        const targetY = mesh.userData.type === 'player' ? (CELL_3D_SIZE * 0.9) / 2 : (CELL_3D_SIZE * 1.0) / 2;
+        // Get target Y based on the *new* simple box geometries
+        const meshHeight = mesh.geometry.parameters.height; // Get height from BoxGeometry
+        const targetY = meshHeight / 2; // Center of the box vertically
         const targetPos3D = get3DPosition(targetGridPos.x, targetGridPos.y, targetY);
-        const hopHeight = CELL_3D_SIZE * 0.3;
+        const hopHeight = CELL_3D_SIZE * 0.15; // Less hop
         const midPos3D = new THREE.Vector3((startPos3D.x + targetPos3D.x) / 2, Math.max(startPos3D.y, targetPos3D.y) + hopHeight, (startPos3D.z + targetPos3D.z) / 2);
-        new TWEEN.Tween(startPos3D).to(midPos3D, MOVEMENT_DURATION * 0.5).easing(TWEEN.Easing.Quadratic.Out)
+
+        // Use Linear easing for a less smooth, more direct move
+        new TWEEN.Tween(startPos3D).to(midPos3D, MOVEMENT_DURATION * 0.5).easing(TWEEN.Easing.Linear.None)
             .onUpdate(() => { mesh.position.copy(startPos3D); })
             .onComplete(() => {
-                new TWEEN.Tween(startPos3D).to(targetPos3D, MOVEMENT_DURATION * 0.5).easing(TWEEN.Easing.Quadratic.In)
+                new TWEEN.Tween(startPos3D).to(targetPos3D, MOVEMENT_DURATION * 0.5).easing(TWEEN.Easing.Linear.None)
                     .onUpdate(() => { mesh.position.copy(startPos3D); })
                     .onComplete(resolve).start();
             }).start();
     });
 }
 
-// --- Utility Wait Function --- (Unchanged)
+// --- Utility Wait Function (Unchanged) ---
 function wait(duration) { return new Promise(resolve => setTimeout(resolve, duration)); }
 
 
-// --- Powerup Logic Functions --- (Unchanged)
+// --- Powerup Logic Functions (Unchanged Logic) ---
 function spawnInitialPowerups() {
     powerupMeshes.forEach(p => disposeMesh(p.mesh)); powerupMeshes = []; powerUpPositions = [];
     let availableCells = [];
-    for (let y = 0; y < GRID_SIZE; y++) { for (let x = 0; x < GRID_SIZE; x++) { if (grid[y][x] === 'floor' || grid[y][x] === 'dampener') { if (!(x === playerPos.x && y === playerPos.y) && !(x === aiPos.x && y === aiPos.y)) availableCells.push({ x, y }); } } } // Can spawn on dampeners too
-    if (availableCells.length < INITIAL_POWERUP_COUNT) { console.warn(`Not enough cells (${availableCells.length}) for ${INITIAL_POWERUP_COUNT} powerups.`); availableCells.forEach(cell => { powerUpPositions.push({ x: cell.x, y: cell.y }); const np = createPowerup3D(cell.x, cell.y); if (np) powerupMeshes.push(np); }); return; }
+    for (let y = 0; y < GRID_SIZE; y++) { for (let x = 0; x < GRID_SIZE; x++) { if (grid[y][x] === 'floor' || grid[y][x] === 'dampener') { if (!(x === playerPos.x && y === playerPos.y) && !(x === aiPos.x && y === aiPos.y)) availableCells.push({ x, y }); } } }
+    if (availableCells.length < INITIAL_POWERUP_COUNT) { console.warn(`Only ${availableCells.length} cells for ${INITIAL_POWERUP_COUNT} powerups.`); availableCells.forEach(cell => { powerUpPositions.push({ x: cell.x, y: cell.y }); const np = createPowerup3D(cell.x, cell.y); if (np) powerupMeshes.push(np); }); return; }
     let weightedCells = availableCells.map(cell => { const distPlayer = Math.max(1, distance(cell, playerPos)); const distAi = Math.max(1, distance(cell, aiPos)); const ratio = distAi / distPlayer; const diff = Math.abs(ratio - AI_DISTANCE_BIAS); const weight = 0.01 + 1 / (1 + diff * diff * 10); return { cell, weight }; }).filter(wc => wc.weight > 0);
     let totalWeight = weightedCells.reduce((sum, wc) => sum + wc.weight, 0); let spawnedCount = 0; const maxSpawnAttempts = availableCells.length * 3; let attempts = 0;
     while (spawnedCount < INITIAL_POWERUP_COUNT && weightedCells.length > 0 && attempts < maxSpawnAttempts) {
@@ -1358,20 +1148,20 @@ function spawnInitialPowerups() {
         if (chosenIndex !== -1 && chosenIndex < weightedCells.length) { const { cell } = weightedCells[chosenIndex]; powerUpPositions.push({ x: cell.x, y: cell.y }); const np = createPowerup3D(cell.x, cell.y); if (np) powerupMeshes.push(np); spawnedCount++; totalWeight -= weightedCells[chosenIndex].weight; weightedCells.splice(chosenIndex, 1); }
         else { console.error("Error during weighted sampling."); break; }
     }
-    if (spawnedCount < INITIAL_POWERUP_COUNT) { console.warn(`Could only spawn ${spawnedCount}/${INITIAL_POWERUP_COUNT} powerups.`); } else { console.log(`Spawned ${spawnedCount} initial powerups.`); }
+    if (spawnedCount < INITIAL_POWERUP_COUNT) { console.warn(`Only spawned ${spawnedCount}/${INITIAL_POWERUP_COUNT} powerups.`); } else { console.log(`Spawned ${spawnedCount} initial powerups.`); }
 }
 function spawnRandomPowerup() {
     if (powerUpPositions.length >= MAX_POWERUPS) return;
     let emptyCells = [];
-    for (let y = 0; y < GRID_SIZE; y++) { for (let x = 0; x < GRID_SIZE; x++) { if (grid[y][x] === 'floor' || grid[y][x] === 'dampener') { if (!(x === playerPos.x && y === playerPos.y) && !(x === aiPos.x && y === aiPos.y) && !isPowerupAt(x, y)) emptyCells.push({ x, y }); } } } // Can spawn on dampeners
+    for (let y = 0; y < GRID_SIZE; y++) { for (let x = 0; x < GRID_SIZE; x++) { if (grid[y][x] === 'floor' || grid[y][x] === 'dampener') { if (!(x === playerPos.x && y === playerPos.y) && !(x === aiPos.x && y === aiPos.y) && !isPowerupAt(x, y)) emptyCells.push({ x, y }); } } }
     if (emptyCells.length > 0) {
-        const spawnPos = emptyCells[Math.floor(Math.random() * emptyCells.length)]; console.log(`Spawning new fuel cell at ${spawnPos.x}, ${spawnPos.y}`);
+        const spawnPos = emptyCells[Math.floor(Math.random() * emptyCells.length)]; console.log(`Spawning fuel at ${spawnPos.x}, ${spawnPos.y}`);
         powerUpPositions.push({ x: spawnPos.x, y: spawnPos.y }); const np = createPowerup3D(spawnPos.x, spawnPos.y); if (np) powerupMeshes.push(np);
     } else { console.log("No empty cells for powerup."); }
 }
 
 
-// --- Game Over Function --- (Unchanged)
+// --- Game Over Function (Unchanged) ---
 function endGame(message, winner) {
     console.log("Game Over:", message);
     gamePhase = "gameOver"; gameOverState = { winner: winner, message: message };
@@ -1380,7 +1170,7 @@ function endGame(message, winner) {
 }
 
 
-// --- Utility Functions --- (UPDATED for dampeners)
+// --- Utility Functions (Unchanged Logic) ---
 function isValid(x, y) { return x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE; }
 function isWall(x, y) { return isValid(x, y) && grid[y][x] === "wall"; }
 function isPowerupAt(x, y) { return powerUpPositions.some(p => p.x === x && p.y === y); }
@@ -1389,7 +1179,6 @@ function getValidMoves(unitPos, opponentPosToBlock) {
     const directions = [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }];
     directions.forEach(dir => {
         const nextX = unitPos.x + dir.dx; const nextY = unitPos.y + dir.dy;
-        // Check if valid, not a wall, and not blocked by opponent
         if (isValid(nextX, nextY) && grid[nextY][nextX] !== "wall" && !(nextX === opponentPosToBlock?.x && nextY === opponentPosToBlock?.y)) {
             moves.push({ x: nextX, y: nextY });
         }
