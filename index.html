@@ -3,66 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prototype Missile Game</title> <!-- Updated Title -->
+    <title>Minimal 3D Board</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="game-container">
-
         <!-- Area for the 3D Canvas -->
         <div id="game-canvas-area">
             <div id="gameCanvasContainer">
                 <canvas id="threeCanvas"></canvas>
             </div>
         </div>
-
-        <!-- Fixed UI Panel -->
-        <div id="ui-panel">
-            <h1>PROTOTYPE GAME</h1> <!-- Simple Title -->
-
-            <div class="ui-section info-panel">
-                <h2>Status</h2>
-                <p id="phaseIndicator">Phase: Loading</p>
-                <div id="messageAreaContainer"><p id="messageArea">Loading game...</p></div>
-                 <div id="planningInfo">
-                    <span id="planFuelCostInfo"></span>
-                 </div>
-            </div>
-
-
-            <div class="ui-section controls-panel">
-                <h2>Controls & Status</h2> <!-- Simplified Section Title -->
-                <!-- Status (No grid layout) -->
-                 <p id="playerHealthInfo">Player Health: 3 / 3</p>
-                 <p id="playerFuelInfo">Player Fuel: 10</p>
-                 <p id="aiHealthInfo">AI Health: 3 / 3</p>
-                 <p id="aiFuelInfo">AI Fuel: 10</p>
-                 <!-- End Status -->
-                <div class="mode-select">
-                    <button id="btnPlanMove" class="mode-button">Plan Move</button>
-                    <button id="btnPlanShoot" class="mode-button">Plan Missile</button>
-                </div>
-            </div>
-
-            <div class="ui-section game-actions-panel">
-                 <h2>Game</h2>
-                 <button id="btnReset">Reset Game</button>
-            </div>
-
-            <div class="ui-footer">
-                <p>Prototype v0.1</p>
-            </div>
-        </div>
-
+        <!-- Removed the entire ui-panel -->
     </div>
 
-    <!-- Import map for Three.js and Tween.js (ESM) -->
+    <!-- Import map for Three.js -->
     <script type="importmap">
       {
         "imports": {
           "three": "https://unpkg.com/three@0.162.0/build/three.module.js",
-          "three/addons/": "https://unpkg.com/three@0.162.0/examples/jsm/",
-           "@tweenjs/tween.js": "https://unpkg.com/@tweenjs/tween.js@23.1.1/dist/tween.esm.js"
+          "three/addons/": "https://unpkg.com/three@0.162.0/examples/jsm/"
         }
       }
     </script>
